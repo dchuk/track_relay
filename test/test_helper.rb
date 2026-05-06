@@ -17,6 +17,10 @@ class ActiveSupport::TestCase
   include ActiveSupport::CurrentAttributes::TestHelper
 
   teardown do
+    # Stop the global Dispatcher subscription so a test that starts it
+    # does not leak its subscription block into subsequent tests. Safe
+    # to call when the Dispatcher was never started.
+    TrackRelay::Dispatcher.stop! if defined?(TrackRelay::Dispatcher)
     TrackRelay::Catalog.clear! if defined?(TrackRelay::Catalog)
     TrackRelay.reset_config!
   end

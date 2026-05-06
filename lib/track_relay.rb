@@ -15,6 +15,7 @@ require "track_relay/subscribers/base"
 require "track_relay/subscribers/test"
 require "track_relay/subscribers/logger"
 require "track_relay/delivery_job"
+require "track_relay/dispatcher"
 
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
