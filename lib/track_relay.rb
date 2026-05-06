@@ -12,6 +12,7 @@ require "track_relay/current"
 require "track_relay/configuration"
 require "track_relay/instrumenter"
 require "track_relay/subscribers/base"
+require "track_relay/subscribers/test"
 require "track_relay/delivery_job"
 
 module TrackRelay
