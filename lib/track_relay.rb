@@ -9,6 +9,7 @@ require "track_relay/catalog"
 require "track_relay/dsl/param_builder"
 require "track_relay/dsl/event_builder"
 require "track_relay/current"
+require "track_relay/configuration"
 
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
@@ -68,6 +69,39 @@ module TrackRelay
     video_start
     view_search_results
   ].freeze
+
+  class << self
+    # Process-wide {Configuration} singleton. Lazily instantiated on
+    # first access. Reset between tests via {reset_config!}.
+    #
+    # @return [Configuration]
+    def config
+      @config ||= Configuration.new
+    end
+
+    # Yield the {Configuration} singleton for host-app setup, then
+    # return it so callers can chain.
+    #
+    #   TrackRelay.configure do |c|
+    #     c.subscribe(MySubscriber.new)
+    #     c.untyped_events_allowed = false
+    #   end
+    #
+    # @yieldparam config [Configuration]
+    # @return [Configuration]
+    def configure
+      yield(config)
+      config
+    end
+
+    # Replace the singleton with a fresh {Configuration}. Used by the
+    # test suite's teardown hook so per-test mutations do not leak.
+    #
+    # @return [Configuration] the new (default) configuration
+    def reset_config!
+      @config = Configuration.new
+    end
+  end
 
   # Top-level entry point for the catalog DSL.
   #

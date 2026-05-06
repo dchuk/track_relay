@@ -15,4 +15,9 @@ require "active_support/current_attributes/test_helper"
 
 class ActiveSupport::TestCase
   include ActiveSupport::CurrentAttributes::TestHelper
+
+  teardown do
+    TrackRelay::Catalog.clear! if defined?(TrackRelay::Catalog)
+    TrackRelay.reset_config!
+  end
 end
