@@ -82,3 +82,9 @@ module TrackRelay
     end
   end
 end
+
+# Auto-load RSpec matchers when RSpec is on the load path. The
+# matcher file itself is also guarded with `if defined?(RSpec)`, so
+# consumers who require it directly outside an RSpec context are
+# still safe — the file becomes a no-op.
+require "track_relay/testing/rspec_matchers" if defined?(RSpec)

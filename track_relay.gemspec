@@ -34,6 +34,8 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "combustion", "~> 1.3"
   spec.add_development_dependency "minitest", "~> 5.16"
   spec.add_development_dependency "rake"
+  spec.add_development_dependency "rspec-core", "~> 3.13"
+  spec.add_development_dependency "rspec-expectations", "~> 3.13"
   spec.add_development_dependency "sqlite3"
   spec.add_development_dependency "standard"
 end
