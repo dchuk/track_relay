@@ -60,6 +60,34 @@ module TrackRelay
       payload
     end
 
+    # Reconstruct an EventPayload from a serialized {to_h} form. Used
+    # by Plan 05's {DeliveryJob} to rehydrate a payload after ActiveJob
+    # has serialized arguments through the queue adapter.
+    #
+    # The reconstructed payload is always untyped (`definition: nil`):
+    # validation happened at track time on the calling thread, so the
+    # async delivery path doesn't need the schema. ActiveJob's argument
+    # serialization round-trips Symbols as Strings under the standard
+    # adapter, so `String#to_sym` is applied defensively to the name.
+    #
+    # @param hash [Hash] result of {to_h} (Symbol- or String-keyed)
+    # @return [EventPayload]
+    def self.from_h(hash)
+      payload = allocate
+      payload.instance_variable_set(:@definition, nil)
+      payload.instance_variable_set(:@params, hash[:params] || hash["params"] || {})
+      payload.instance_variable_set(:@context, hash[:context] || hash["context"] || {})
+      payload.instance_variable_set(
+        :@timestamp,
+        Time.iso8601(hash[:timestamp] || hash["timestamp"])
+      )
+      payload.instance_variable_set(
+        :@untyped_name,
+        (hash[:name] || hash["name"]).to_sym
+      )
+      payload
+    end
+
     # @return [Symbol] event name (from definition or untyped store)
     def name
       @definition ? @definition.name : @untyped_name

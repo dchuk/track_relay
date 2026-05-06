@@ -11,6 +11,8 @@ require "track_relay/dsl/event_builder"
 require "track_relay/current"
 require "track_relay/configuration"
 require "track_relay/instrumenter"
+require "track_relay/subscribers/base"
+require "track_relay/delivery_job"
 
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
