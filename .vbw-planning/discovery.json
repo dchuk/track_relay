@@ -1,0 +1,75 @@
+{
+  "answered": [
+    {
+      "question": "Ruby + Rails support matrix for the gem",
+      "answer": "Ruby >= 3.2; CI matrix Rails 7.1, 7.2, 8.0; gemspec required_ruby_version = >= 3.2; Rails dependency >= 7.1 with no upper bound",
+      "area": "ruby-rails-matrix",
+      "phase": "01",
+      "date": "2026-05-05"
+    },
+    {
+      "question": "Where should the failsafe rescue live?",
+      "answer": "Per-subscriber rescue inside Subscribers::Base#deliver; on StandardError log via Rails.logger.error with subscriber name; re-raise in dev/test unless config.swallow_subscriber_errors = true",
+      "area": "failsafe-boundary",
+      "phase": "01",
+      "date": "2026-05-05"
+    },
+    {
+      "question": "Test framework for the gem's own test suite",
+      "answer": "Minitest (Rails-core convention; user has tdd-cycle skill calibrated for Minitest + fixtures; gem still ships matchers for both RSpec and Minitest for consumers)",
+      "area": "gem-test-framework",
+      "phase": "01",
+      "date": "2026-05-05"
+    },
+    {
+      "question": "How should untyped events be detected so the linter rake task can report them?",
+      "answer": "Logger subscriber writes to Rails.logger AND appends JSONL to tmp/track_relay_untyped.jsonl when config.untyped_log_path or config.capture_untyped is set. JSONL records event name and param-name list only (no values). rake track_relay:lint reads the JSONL and dedupes by event+param signature.",
+      "area": "untyped-detection",
+      "phase": "01",
+      "date": "2026-05-05"
+    }
+  ],
+  "inferred": [
+    {
+      "id": "REQ-21",
+      "text": "Gem own test suite uses Minitest with ActiveSupport::TestCase for Rails-integration tests; no rspec/spec_helper",
+      "priority": "Must-have",
+      "source": "Discussion: gem-test-framework"
+    },
+    {
+      "id": "REQ-22",
+      "text": "tmp/track_relay_untyped.jsonl is the canonical untyped-event sink; param values are never written, only param names",
+      "priority": "Must-have",
+      "source": "Discussion: untyped-detection"
+    },
+    {
+      "id": "REQ-23",
+      "text": "Subscribers::Base#deliver rescues StandardError and continues dispatch; re-raises in dev/test unless config.swallow_subscriber_errors is true",
+      "priority": "Must-have",
+      "source": "Discussion: failsafe-boundary"
+    },
+    {
+      "id": "REQ-24",
+      "text": "gemspec required_ruby_version >= 3.2; CI matrix runs Rails 7.1, 7.2, 8.0",
+      "priority": "Must-have",
+      "source": "Discussion: ruby-rails-matrix"
+    }
+  ],
+  "deferred": [
+    {
+      "idea": "Privacy/GDPR built-ins (IP masking, DNT, consent gating)",
+      "mentioned_during": "Phase 1 discussion",
+      "date": "2026-05-05"
+    },
+    {
+      "idea": "Subscriber ordering with after: option",
+      "mentioned_during": "Phase 1 discussion",
+      "date": "2026-05-05"
+    },
+    {
+      "idea": "Custom Rubocop cop flagging raw gtag/ahoy.track calls",
+      "mentioned_during": "Phase 1 discussion",
+      "date": "2026-05-05"
+    }
+  ]
+}
