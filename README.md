@@ -1,10 +1,263 @@
 # track_relay
 
-One catalog, many destinations: eliminate dual event vocabularies between marketing
-and product analytics in Rails apps.
+Unified, typed event tracking for Rails apps. One catalog, multiple destinations, built on `ActiveSupport::Notifications`.
 
 ## Status
 
-0.1.0 in development. Phase 01 (Core MVP) is currently being scaffolded — the
-catalog DSL, dispatch, and built-in subscribers are not yet shipped. The full
-README lands with the 0.1.0 release.
+0.1.0 — core MVP (catalog DSL, AS::Notifications dispatch, Test/Logger subscribers, untyped-event linter, Minitest assertions, RSpec matchers). GA4 and Ahoy adapters land in 0.2.0 / 0.3.0.
+
+## Why
+
+Modern Rails apps that want both marketing analytics (GA4) and product analytics (your DB) end up with two parallel event vocabularies. `track_relay` defines events once in a typed catalog and fans them out to every destination, server-side and client-side, without copy-paste.
+
+## Installation
+
+Add to your Gemfile:
+
+```ruby
+gem "track_relay", "~> 0.1.0"
+```
+
+Then `bundle install`.
+
+Requires Ruby 3.2+ and Rails 7.1, 7.2, or 8.0.
+
+## Quick start
+
+```ruby
+# config/initializers/track_relay.rb
+TrackRelay.configure do |c|
+  c.untyped_log_path = Rails.root.join("tmp/track_relay_untyped.jsonl")
+  c.subscribe TrackRelay::Subscribers::Logger.new
+end
+
+# config/track_relay/articles.rb
+TrackRelay.catalog do
+  event :article_viewed do
+    integer :article_id, required: true
+    string  :slug,       required: true
+    string  :category
+  end
+end
+
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  include TrackRelay::ControllerTracking
+end
+
+# app/controllers/articles_controller.rb
+class ArticlesController < ApplicationController
+  def show
+    @article = Article.find(params[:id])
+    track :article_viewed, article_id: @article.id, slug: @article.slug
+    # ...
+  end
+end
+```
+
+That is the full path from `bundle install` to a fired event — five files, no generators required.
+
+## Catalog DSL
+
+Declare events in `config/track_relay/*.rb`. The Railtie autoloads the directory at boot and reloads it on every code reload in development (Zeitwerk-friendly: the directory is explicitly ignored by the autoloader so DSL files never look like constant definitions).
+
+| Type | Example |
+|------|---------|
+| integer | `integer :count, required: true` |
+| string | `string :name, max: 100` |
+| float | `float :amount` |
+| boolean | `boolean :flag` |
+| datetime | `datetime :occurred_at` |
+
+Validators: `required:`, `max:`, `in:`, `format:`, `sanitize:` (callable, runs before validation — no silent truncation). Validation runs at `track` time on the calling thread; failures raise `TrackRelay::ValidationError` when `config.raise_on_validation_error` is true (the default in dev/test).
+
+Each catalog entry produces a `TrackRelay::EventDefinition` (the schema) which is used at `track` time to build a `TrackRelay::EventPayload` (the runtime instance). `EventDefinition` and `EventPayload` are intentionally separate classes so the schema is shareable and immutable across calls while the payload owns the per-call params, context, and timestamp.
+
+### GA4 constraints (applied automatically)
+
+- snake_case event names
+- max 40 characters per event name
+- max 25 custom params per event
+- GA4 reserved names (`page_view`, `session_start`, `screen_view`, etc.) are refused at catalog load with `TrackRelay::Ga4ConstraintError`
+
+### Reserved keys
+
+Four keys are reserved and partitioned out of `params` automatically by `TrackRelay.track`:
+
+- `:user`, `:request`, `:client_id` — bound on `TrackRelay::Current` for the duration of the call (block-scoped via `Current.set`).
+- `:visitor_token` — written directly to `payload.context[:visitor_token]`. It is intentionally **not** a `Current` attribute: `Current` carries `:visit` (an Ahoy-style visit record), not a raw token.
+
+Defining any of these four as a catalog param raises `TrackRelay::ReservedKeyError` at boot, so the conflict surfaces before any event is fired.
+
+### Identify
+
+```ruby
+TrackRelay.identify(current_user, plan: "pro", country: "US")
+```
+
+`identify` is a thin pass-through in 0.1.0: it instruments `track_relay.identify` with `{user:, properties:}` so subscribers can route the user property update wherever they need to. Per-adapter user-property validation (GA4 `user_properties`, etc.) lands in 0.2.0.
+
+## Subscribers
+
+`TrackRelay::Subscribers::Base` is the base class for every subscriber. It exposes a `synchronous!` macro (opts the subclass out of the async `DeliveryJob` path) and a per-subscriber `safe_deliver` rescue that returns the exception instead of re-raising — so one bad subscriber never blocks peers from receiving the event.
+
+```ruby
+class MySubscriber < TrackRelay::Subscribers::Base
+  synchronous!  # opt out of async DeliveryJob
+
+  def deliver(payload)
+    # payload.name, payload.params, payload.context, payload.timestamp
+  end
+end
+```
+
+Async subscribers automatically dispatch via `TrackRelay::DeliveryJob` (an `ActiveJob::Base` subclass). Use Solid Queue, Sidekiq, or any other ActiveJob adapter as your backend.
+
+`TrackRelay::Dispatcher` is the single `ActiveSupport::Notifications` subscription that fans `track_relay.event` notifications out to `config.subscribers`. Its **collect-then-reraise** error contract means: every peer receives the payload, then if `config.swallow_subscriber_errors` is `false` (the default in dev/test), the first collected exception is re-raised after fan-out completes. In production (`swallow_subscriber_errors=true`), exceptions are logged and swallowed so a single broken adapter doesn't take the application down. The Dispatcher is started automatically by the Railtie on `after_initialize`.
+
+Built-in subscribers:
+
+- `Subscribers::Test` — in-memory capture for specs. Per-instance state, no class-level globals.
+- `Subscribers::Logger` — writes a one-line summary to `Rails.logger`; appends untyped events to `config.untyped_log_path` JSONL with the canonical shape `{event, params, controller, action, timestamp}` (param NAMES only — values are never written, by design, to avoid leaking PII).
+
+### Subscribing directly to AS::Notifications
+
+Because every event is published through `ActiveSupport::Notifications.instrument("track_relay.event", event: payload)`, host apps can subscribe directly without writing a `Subscribers::Base` subclass at all:
+
+```ruby
+ActiveSupport::Notifications.subscribe("track_relay.event") do |*, payload|
+  Rails.logger.tagged("analytics") { Rails.logger.info(payload[:event].name) }
+end
+```
+
+This is useful for one-off integrations and for debugging — your existing `ActiveSupport::Notifications` tooling (lograge, the Rails event reporter, etc.) just works.
+
+### Controller and Job helpers
+
+```ruby
+class ApplicationController < ActionController::Base
+  include TrackRelay::ControllerTracking
+  # adds a `track` instance method + a before_action that populates
+  # Current.controller / Current.request / Current.client_id (from the _ga cookie)
+end
+
+class WelcomeEmailJob < ApplicationJob
+  include TrackRelay::JobTracking
+  # adds a `track` instance method; use Current.set { ... } block form
+  # inside `perform` to populate context (the Rails Executor clears
+  # CurrentAttributes before every job, by design).
+
+  def perform(user)
+    TrackRelay::Current.set(user: user) do
+      track :welcome_email_sent, template_version: "v3"
+    end
+  end
+end
+```
+
+## Test helpers
+
+The testing surface is **opt-in**. Add `require "track_relay/testing"` to your `test_helper.rb` (Minitest) or `rails_helper.rb` (RSpec) — `lib/track_relay.rb` does NOT require it automatically, so the `Subscribers::Test` swap and RSpec matchers stay out of production runtime.
+
+`TrackRelay.test_mode!` atomically replaces the configured subscriber list with a single `Subscribers::Test` instance and forces synchronous delivery; `TrackRelay.test_mode_off!` restores the previous list. Tests assert against the captured events without spinning up real adapters or external services.
+
+### Minitest
+
+```ruby
+# test/test_helper.rb
+require "track_relay/testing"
+# OR (just the Minitest helpers)
+require "track_relay/testing/helpers"
+
+class MyTest < ActiveSupport::TestCase
+  include TrackRelay::Testing::Helpers  # auto test_mode! / test_mode_off! per test
+
+  test "fires article_viewed" do
+    get article_path(@article)
+    assert_tracked :article_viewed, article_id: @article.id
+  end
+
+  test "does not double-fire" do
+    refute_tracked :article_viewed, article_id: 99
+  end
+end
+```
+
+### RSpec
+
+```ruby
+# spec/rails_helper.rb
+require "track_relay/testing"
+
+RSpec.configure do |c|
+  c.before(:each) { TrackRelay.test_mode! }
+  c.after(:each)  { TrackRelay.test_mode_off! }
+end
+
+it "fires outbound_click" do
+  click_link "External"
+  expect(track_relay).to have_tracked(:outbound_click).with(destination_domain: "example.com")
+end
+```
+
+The RSpec matchers are loaded only when `RSpec` is already defined, so the gem stays test-framework-agnostic.
+
+## Untyped events + linter
+
+Untyped events (events that aren't in the catalog) are allowed by default — `config.untyped_events_allowed = true` — so teams can adopt the catalog incrementally. Set `config.untyped_log_path` to capture every untyped fire to a JSONL file:
+
+```ruby
+TrackRelay.configure do |c|
+  c.untyped_log_path = Rails.root.join("tmp/track_relay_untyped.jsonl")
+end
+```
+
+Then audit with the bundled rake tasks:
+
+```bash
+$ bundle exec rake track_relay:lint
+# track_relay untyped event audit
+# events: 3; total occurrences: 47
+event :outbound_click  (32 total)
+  - params=[destination_url, link_text, source_path]  count=32
+event :search_executed  (12 total)
+  - params=[filters, query]  count=12
+event :modal_dismissed  (3 total)
+  - params=[modal_id]  count=3
+```
+
+`bundle exec rake track_relay:lint:json` emits the same data as JSON for consumption by external tooling (Slack notifiers, dashboards, CI gates).
+
+The linter (`TrackRelay::Linter`) dedupes by event name + sorted-param-name signature: two firings of `:outbound_click` with the same param names collapse into one row, while different param shapes count separately so you can spot drift.
+
+If `config.untyped_log_path` is unset, both rake tasks abort with a nonzero exit code and a configuration message — by design, so a misconfigured audit pipeline doesn't silently exit 0.
+
+The JSONL captures only sorted, stringified parameter NAMES (never values) for the same privacy reason.
+
+## Compatibility
+
+- Ruby 3.2, 3.3, 3.4
+- Rails 7.1, 7.2, 8.0
+- Test framework: any (gem ships matchers for both Minitest and RSpec; gem itself uses Minitest)
+
+CI runs the full Ruby × Rails matrix (9 combinations) on every push via Appraisal + GitHub Actions.
+
+## Roadmap
+
+- 0.2.0 — GA4 Measurement Protocol subscriber + JSON manifest for client-side tracking
+- 0.3.0 — Ahoy subscriber (server + client)
+- 0.4.0 — install / event / subscriber generators, more built-in subscribers (PostHog, Plausible, webhooks)
+
+## Contributing
+
+```bash
+bundle install
+bundle exec rake          # default = standard + test
+bundle exec appraisal install   # one-time, generates gemfiles/*.gemfile
+```
+
+The test harness boots a minimal Combustion-backed dummy app under `test/internal/`. CI runs Ruby 3.2/3.3/3.4 × Rails 7.1/7.2/8.0 (9 combinations) via Appraisal. Linting uses StandardRB (`bundle exec standardrb`).
+
+## License
+
+MIT — see [LICENSE.txt](LICENSE.txt).
