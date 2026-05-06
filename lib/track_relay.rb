@@ -8,6 +8,7 @@ require "track_relay/validators/catalog_validator"
 require "track_relay/catalog"
 require "track_relay/dsl/param_builder"
 require "track_relay/dsl/event_builder"
+require "track_relay/current"
 
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
