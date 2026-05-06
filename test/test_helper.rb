@@ -3,13 +3,18 @@
 require "bundler/setup"
 require "combustion"
 
+# Require track_relay BEFORE Combustion.initialize! so that the
+# Railtie is registered with Rails::Railtie.subclasses before the
+# application boots. Otherwise the Railtie's initializers would never
+# run because the host app finished booting before the gem was loaded.
+require "track_relay"
+
 Combustion.path = "test/internal"
 Combustion.initialize!(:action_controller, :active_job) do
   config.active_job.queue_adapter = :test
   config.logger = ActiveSupport::Logger.new(IO::NULL)
 end
 
-require "track_relay"
 require "minitest/autorun"
 require "active_support/current_attributes/test_helper"
 

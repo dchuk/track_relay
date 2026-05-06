@@ -17,6 +17,12 @@ require "track_relay/subscribers/logger"
 require "track_relay/delivery_job"
 require "track_relay/dispatcher"
 
+# The Railtie is the only Rails-coupled file pulled in at load time.
+# Load it conditionally so the gem still works in non-Rails contexts
+# (plain `require "track_relay"` from a script). Everything above this
+# line depends on activesupport but not the full Rails stack.
+require "track_relay/railtie" if defined?(Rails::Railtie)
+
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
   # with the runtime context that track_relay injects automatically
