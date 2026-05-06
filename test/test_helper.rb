@@ -19,6 +19,7 @@ require "combustion"
 # explicitly here closes the gap.
 require "track_relay"
 require "track_relay/railtie"
+require "track_relay/testing"
 
 Combustion.path = "test/internal"
 Combustion.initialize!(:action_controller, :active_job) do
