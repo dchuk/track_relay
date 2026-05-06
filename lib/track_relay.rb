@@ -2,6 +2,12 @@
 
 require "track_relay/version"
 require "track_relay/errors"
+require "track_relay/event_definition"
+require "track_relay/validators/ga4_constraints"
+require "track_relay/validators/catalog_validator"
+require "track_relay/catalog"
+require "track_relay/dsl/param_builder"
+require "track_relay/dsl/event_builder"
 
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
@@ -61,4 +67,25 @@ module TrackRelay
     video_start
     view_search_results
   ].freeze
+
+  # Top-level entry point for the catalog DSL.
+  #
+  # Evaluates `block` against a {DSL::EventBuilder} so callers can use
+  # `event :name do ... end` and `user_property :name, :type` directly:
+  #
+  #   TrackRelay.catalog do
+  #     event :article_viewed do
+  #       integer :article_id, required: true
+  #     end
+  #
+  #     user_property :plan, :string
+  #   end
+  #
+  # Each `event` declaration validates against GA4 + reserved-key rules
+  # and registers the resulting {EventDefinition} in {Catalog} before
+  # returning. Failures raise {Ga4ConstraintError},
+  # {ReservedKeyError}, or {CatalogError} depending on the violation.
+  def self.catalog(&block)
+    DSL::EventBuilder.new.instance_exec(&block)
+  end
 end
