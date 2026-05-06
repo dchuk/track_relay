@@ -10,6 +10,7 @@ require "track_relay/dsl/param_builder"
 require "track_relay/dsl/event_builder"
 require "track_relay/current"
 require "track_relay/configuration"
+require "track_relay/instrumenter"
 
 module TrackRelay
   # Param keys that cannot appear in a catalog event because they collide
@@ -101,6 +102,34 @@ module TrackRelay
     def reset_config!
       @config = Configuration.new
     end
+  end
+
+  # Track an event — typed (catalog-defined) or untyped.
+  #
+  # Reserved keys (`:user`, `:request`, `:client_id`, `:visitor_token`)
+  # are partitioned out of `params` BEFORE catalog lookup so they never
+  # appear in `payload.params`. `:user`/`:request`/`:client_id` are
+  # bound on {Current} for the duration of the call;
+  # `:visitor_token` is merged directly into `payload.context`.
+  #
+  # See {Instrumenter.track} for full semantics.
+  #
+  # @param name [Symbol]
+  # @param params [Hash]
+  # @return [void]
+  def self.track(name, **params)
+    Instrumenter.track(name, **params)
+  end
+
+  # Identify a user — Phase 01 thin pass-through.
+  #
+  # See {Instrumenter.identify}.
+  #
+  # @param user [Object]
+  # @param user_properties [Hash]
+  # @return [void]
+  def self.identify(user, **user_properties)
+    Instrumenter.identify(user, **user_properties)
   end
 
   # Top-level entry point for the catalog DSL.
