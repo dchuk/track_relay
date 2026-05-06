@@ -16,6 +16,7 @@ require "track_relay/subscribers/test"
 require "track_relay/subscribers/logger"
 require "track_relay/delivery_job"
 require "track_relay/dispatcher"
+require "track_relay/controller_tracking"
 
 # The Railtie is the only Rails-coupled file pulled in at load time.
 # Load it conditionally so the gem still works in non-Rails contexts
