@@ -55,5 +55,12 @@ module TrackRelay
         TrackRelay::Dispatcher.start!
       end
     end
+
+    # Make `rake track_relay:lint` and `rake track_relay:lint:json`
+    # available in any consumer app. `__dir__` is `lib/track_relay`;
+    # `..` walks to `lib`; the rake file lives at `lib/tasks/track_relay.rake`.
+    rake_tasks do
+      load File.expand_path("../tasks/track_relay.rake", __dir__)
+    end
   end
 end
