@@ -16,6 +16,8 @@
 // .ga4_measurement_id + asset_path('track_relay_catalog.json')) and the
 // JS package cannot read Ruby config. Misconfiguration MUST be loud.
 
+import { validateParams } from "./validator.js";
+
 let _measurementId = null;
 let _manifest = null;
 let _env = "production";
@@ -56,17 +58,27 @@ export async function init({ measurementId, manifestUrl, env = "production", onV
  * `console.warn`s — mirrors REQ-05 server-side semantics.
  */
 export function track(eventName, params = {}) {
-  // Untyped events allowed (REQ-06). Validation only runs when a typed
-  // entry exists for `eventName`.
-  // (Validation lands in Task 3 — for now we just dispatch.)
+  const schema = _manifest?.events?.[eventName];
 
-  _flushConfigOnce();
+  // Typed event — validate. Untyped events pass through (REQ-06).
+  if (schema) {
+    const errors = validateParams(eventName, schema, params);
+    if (errors.length > 0) {
+      _onValidationError?.(errors);
+      if (_env === "development") {
+        throw new Error(`${PREFIX}: ${errors.join("; ")}`);
+      }
+      console.warn(`${PREFIX}:`, ...errors);
+      return; // drop in production
+    }
+  }
 
   if (typeof window === "undefined" || typeof window.gtag !== "function") {
     console.warn(`${PREFIX}: window.gtag not found — event dropped: ${eventName}`);
     return;
   }
 
+  _flushConfigOnce();
   window.gtag("event", eventName, params);
 }
 

@@ -87,3 +87,126 @@ describe("track() pass-through behavior", () => {
     expect(eventCall).toEqual(["event", "ping", {}]);
   });
 });
+
+describe("track() validation — REQ-05 mirror", () => {
+  test("dev: throws Error including event name + missing key when required param absent", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-TEST", manifestUrl: "/m.json", env: "development" });
+
+    expect(() => track("purchase", { currency: "USD" })).toThrow(/purchase.*value/);
+  });
+
+  test("prod: console.warn is called and gtag('event') is NOT called when required param absent", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-TEST", manifestUrl: "/m.json", env: "production" });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    track("purchase", { currency: "USD" });
+
+    expect(warnSpy).toHaveBeenCalled();
+    const eventCalls = window.gtag.mock.calls.filter((c) => c[0] === "event");
+    expect(eventCalls).toHaveLength(0);
+  });
+
+  test("dev: throws on wrong type (string for float)", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-TEST", manifestUrl: "/m.json", env: "development" });
+
+    expect(() =>
+      track("purchase", { value: "not-a-number", currency: "USD" })
+    ).toThrow(/value.*float/);
+  });
+
+  test("prod: console.warn + drop on wrong type", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-TEST", manifestUrl: "/m.json", env: "production" });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    track("purchase", { value: "not-a-number", currency: "USD" });
+
+    expect(warnSpy).toHaveBeenCalled();
+    const eventCalls = window.gtag.mock.calls.filter((c) => c[0] === "event");
+    expect(eventCalls).toHaveLength(0);
+  });
+
+  test("missing window.gtag — warn + drop, never throw", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-TEST", manifestUrl: "/m.json" });
+
+    delete window.gtag;
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(() => track("purchase", { value: 1, currency: "USD" })).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/window\.gtag not found/));
+  });
+
+  test("extra params not in schema — allowed, pass through without warning", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-TEST", manifestUrl: "/m.json", env: "development" });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(() =>
+      track("purchase", { value: 9.99, currency: "USD", extra_field: "ignored" })
+    ).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    const eventCall = window.gtag.mock.calls.find((c) => c[0] === "event");
+    expect(eventCall[2]).toEqual({ value: 9.99, currency: "USD", extra_field: "ignored" });
+  });
+
+  test("onValidationError callback fires with error array (prod, drops event)", async () => {
+    mockFetchManifest();
+    const cb = vi.fn();
+    await init({
+      measurementId: "G-TEST",
+      manifestUrl: "/m.json",
+      env: "production",
+      onValidationError: cb
+    });
+
+    track("purchase", { currency: "USD" });
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb.mock.calls[0][0]).toEqual(expect.arrayContaining([expect.stringMatching(/value/)]));
+  });
+
+  test("integer type accepts numbers without fractional component", async () => {
+    mockFetchManifest({
+      version: "0.2.0",
+      generated_at: "2026-05-06T00:00:00Z",
+      events: { tally: { params: { count: "integer" }, required: ["count"] } }
+    });
+    await init({ measurementId: "G-T", manifestUrl: "/m.json", env: "development" });
+
+    expect(() => track("tally", { count: 5 })).not.toThrow();
+    expect(() => track("tally", { count: 5.5 })).toThrow(/count.*integer/);
+  });
+
+  test("boolean type accepts true/false only", async () => {
+    mockFetchManifest({
+      version: "0.2.0",
+      generated_at: "2026-05-06T00:00:00Z",
+      events: { flag: { params: { on: "boolean" }, required: ["on"] } }
+    });
+    await init({ measurementId: "G-T", manifestUrl: "/m.json", env: "development" });
+
+    expect(() => track("flag", { on: true })).not.toThrow();
+    expect(() => track("flag", { on: "true" })).toThrow(/on.*boolean/);
+  });
+
+  test("datetime type accepts ISO8601 string or Date instance", async () => {
+    mockFetchManifest({
+      version: "0.2.0",
+      generated_at: "2026-05-06T00:00:00Z",
+      events: { tick: { params: { at: "datetime" }, required: ["at"] } }
+    });
+    await init({ measurementId: "G-T", manifestUrl: "/m.json", env: "development" });
+
+    expect(() => track("tick", { at: "2026-05-06T12:00:00Z" })).not.toThrow();
+    expect(() => track("tick", { at: new Date() })).not.toThrow();
+    expect(() => track("tick", { at: "not-a-date" })).toThrow(/at.*datetime/);
+  });
+});
