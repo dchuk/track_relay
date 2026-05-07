@@ -35,12 +35,30 @@ module TrackRelay
     #   {Current.client_id}. First non-nil result wins. Defaults to
     #   `[ClientId::Ga.new, ClientId::AhoyVisitor.new,
     #   ClientId::Session.new]` (Plan 02-02 / REQ-26).
+    # @!attribute [rw] ga4_measurement_id
+    #   GA4 Measurement Protocol `measurement_id` query parameter
+    #   (`G-XXXXXXXXXX`). Read at delivery time so credentials
+    #   lambdas / late-bound configs work. Defaults to `nil`; when
+    #   `nil` at delivery time the GA4 subscriber emits a
+    #   `Rails.logger.warn` and skips the POST without raising.
+    # @!attribute [rw] ga4_api_secret
+    #   GA4 Measurement Protocol `api_secret` query parameter, scoped
+    #   per data stream. Read at delivery time. Defaults to `nil`;
+    #   same warn-and-skip behavior as {#ga4_measurement_id} when
+    #   missing. Treat as a credential — never commit to source.
+    # @!attribute [rw] ga4_use_eu_endpoint
+    #   When `true`, the GA4 subscriber posts to
+    #   `https://region1.google-analytics.com/mp/collect` instead of
+    #   the global endpoint. Defaults to `false`.
     attr_accessor :swallow_subscriber_errors,
       :untyped_log_path,
       :untyped_events_allowed,
       :force_synchronous,
       :raise_on_validation_error,
-      :client_id_resolvers
+      :client_id_resolvers,
+      :ga4_measurement_id,
+      :ga4_api_secret,
+      :ga4_use_eu_endpoint
 
     # @return [Array] registered subscriber instances, in insertion order
     attr_reader :subscribers
@@ -61,6 +79,9 @@ module TrackRelay
       @force_synchronous = false
       @raise_on_validation_error = development_or_test_env?
       @client_id_resolvers = default_client_id_resolvers
+      @ga4_measurement_id = nil
+      @ga4_api_secret = nil
+      @ga4_use_eu_endpoint = false
     end
 
     # Append a subscriber to the registry.

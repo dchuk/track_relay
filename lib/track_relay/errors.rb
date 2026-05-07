@@ -31,4 +31,24 @@ module TrackRelay
   # Raised when callers attempt to track an event that is not present in
   # the catalog and untyped events are disabled.
   class UnknownEventError < Error; end
+
+  # Raised by a subscriber's `#deliver` to signal a *transient* failure
+  # that the {DeliveryJob} should retry via ActiveJob's `retry_on`.
+  # Examples: HTTP 5xx response, `Net::OpenTimeout`, `Errno::ECONNREFUSED`,
+  # `SocketError` against the GA4 Measurement Protocol endpoint.
+  #
+  # Inherits from `StandardError` (not {Error}) so the
+  # {Subscribers::Base#safe_deliver} carve-out can re-raise it without
+  # dragging in unrelated track_relay error semantics — and so consumers
+  # who rescue `TrackRelay::Error` to log validation failures do not
+  # accidentally swallow a retriable network blip.
+  class DeliveryRetriableError < StandardError; end
+
+  # Raised by a subscriber's `#deliver` to signal a *permanent* failure
+  # that the {DeliveryJob} should drop via ActiveJob's `discard_on`
+  # (HTTP 4xx, malformed credentials, etc.). Defensive: GA4 returns 2xx
+  # in practice even on bad payloads, but we map 4xx defensively in case
+  # Google ever changes that contract. Same `StandardError` rationale as
+  # {DeliveryRetriableError}.
+  class DeliveryDiscardableError < StandardError; end
 end

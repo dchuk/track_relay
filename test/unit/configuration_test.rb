@@ -126,6 +126,61 @@ class TrackRelay::ConfigurationTest < ActiveSupport::TestCase
   end
 
   # ---------------------------------------------------------------
+  # GA4 Measurement Protocol attrs (Plan 02-04)
+  # ---------------------------------------------------------------
+
+  test "ga4_measurement_id defaults to nil" do
+    assert_nil @config.ga4_measurement_id
+  end
+
+  test "ga4_api_secret defaults to nil" do
+    assert_nil @config.ga4_api_secret
+  end
+
+  test "ga4_use_eu_endpoint defaults to false" do
+    assert_equal false, @config.ga4_use_eu_endpoint
+  end
+
+  test "ga4_measurement_id is reader+writer" do
+    @config.ga4_measurement_id = "G-ABC123"
+    assert_equal "G-ABC123", @config.ga4_measurement_id
+  end
+
+  test "ga4_api_secret is reader+writer" do
+    @config.ga4_api_secret = "shh-secret"
+    assert_equal "shh-secret", @config.ga4_api_secret
+  end
+
+  test "ga4_use_eu_endpoint is reader+writer" do
+    @config.ga4_use_eu_endpoint = true
+    assert_equal true, @config.ga4_use_eu_endpoint
+  end
+
+  test "reset! restores ga4_* attrs to defaults" do
+    @config.ga4_measurement_id = "G-ABC"
+    @config.ga4_api_secret = "secret"
+    @config.ga4_use_eu_endpoint = true
+
+    @config.reset!
+
+    assert_nil @config.ga4_measurement_id
+    assert_nil @config.ga4_api_secret
+    assert_equal false, @config.ga4_use_eu_endpoint
+  end
+
+  test "Configuration does NOT expose ga4_delivery_attempts (deferred to Phase 4)" do
+    # Per Plan 02-04 Notes: attempts is a class-local constant on
+    # TrackRelay::DeliveryJob (DEFAULT_GA4_DELIVERY_ATTEMPTS = 5), not a
+    # config attr — late-binding the value through `TrackRelay.config`
+    # at class-body load time is unsafe (the singleton may not exist
+    # when DeliveryJob is required). This test pins the deferral so a
+    # future contributor doesn't quietly add the attr without revisiting
+    # the load-order hazard.
+    refute_respond_to @config, :ga4_delivery_attempts
+    refute_respond_to @config, :ga4_delivery_attempts=
+  end
+
+  # ---------------------------------------------------------------
   # reset!
   # ---------------------------------------------------------------
 
