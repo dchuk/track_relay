@@ -72,19 +72,26 @@ class ControllerTrackingTest < ActionDispatch::IntegrationTest
     ActiveSupport::Notifications.unsubscribe(sub) if sub
   end
 
-  test "missing _ga cookie leaves Current.client_id nil" do
+  test "missing _ga cookie falls through to Session UUID (Phase 02 chain)" do
+    # Phase 02: when the _ga cookie is absent and Ahoy isn't in play,
+    # the default chain falls through to {ClientId::Session}, which
+    # mints a SecureRandom UUID into session[:track_relay_client_id].
+    # Phase 01 returned nil here; Phase 02 returns a stable UUID.
     snapshot = :sentinel
     sub = ActiveSupport::Notifications.subscribe("track_relay.event") do |*, _|
       snapshot = TrackRelay::Current.client_id
     end
 
     get article_path(1)
-    assert_nil snapshot
+    refute_nil snapshot, "Session resolver should mint a UUID when no _ga cookie is present"
+    assert_match(/\A[0-9a-f-]{36}\z/, snapshot)
   ensure
     ActiveSupport::Notifications.unsubscribe(sub) if sub
   end
 
-  test "malformed _ga cookie (too few segments) leaves Current.client_id nil" do
+  test "malformed _ga cookie falls through to Session UUID (Phase 02 chain)" do
+    # Same fall-through logic when the cookie has fewer than four
+    # segments — the Ga resolver returns nil, then Session takes over.
     snapshot = :sentinel
     sub = ActiveSupport::Notifications.subscribe("track_relay.event") do |*, _|
       snapshot = TrackRelay::Current.client_id
@@ -92,7 +99,8 @@ class ControllerTrackingTest < ActionDispatch::IntegrationTest
 
     cookies["_ga"] = "GA1.2"
     get article_path(1)
-    assert_nil snapshot
+    refute_nil snapshot
+    assert_match(/\A[0-9a-f-]{36}\z/, snapshot)
   ensure
     ActiveSupport::Notifications.unsubscribe(sub) if sub
   end
