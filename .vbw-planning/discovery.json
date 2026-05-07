@@ -27,6 +27,34 @@
       "area": "untyped-detection",
       "phase": "01",
       "date": "2026-05-05"
+    },
+    {
+      "question": "How should events pick which GA4 subscriber(s) fire?",
+      "answer": "Subscriber-side filters. TrackRelay.subscribe accepts only:/except: lists; default fires for every event. Filter runs inside Subscribers::Base#deliver before the per-subscriber rescue boundary. Catalog DSL stays vendor-neutral (no send_to: key); preserves one-catalog/many-destinations core value and keeps Phase 4 v2 vendors wireable without DSL changes.",
+      "area": "ga4-routing",
+      "phase": "02",
+      "date": "2026-05-06"
+    },
+    {
+      "question": "How is client_id resolved (cookie chain, parsing, fallback)?",
+      "answer": "Configurable resolver array config.client_id_resolvers = [Ga, AhoyVisitor, Session]; first non-nil wins; resolved once per request, memoized in TrackRelay::Current.client_id. _ga cookie parsed as last two dot-segments (e.g. GA1.2.123456789.1700000000 -> '123456789.1700000000'); malformed -> nil, chain continues. Session fallback = lazy UUID in session[:track_relay_client_id], stable across Rails session, no new top-level cookie.",
+      "area": "client-id-chain",
+      "phase": "02",
+      "date": "2026-05-06"
+    },
+    {
+      "question": "Where should GA4 constraints (REQ-10) be enforced?",
+      "answer": "Split by concern. Boot-time (Catalog DSL) validates event names: snake_case, <=40 chars, reserved-name refusal (frozen constant sourced from Google's GA4 reserved-events docs). Always raises; catalog refuses to load on violation. Call-time (Ga4MeasurementProtocol subscriber, before delivery) validates payload: <=25 custom params actually sent, param-name shape; follows REQ-05 (raise dev/test, log prod). Linter rake task extends untyped-events scan to flag GA4 violations on untyped events.",
+      "area": "ga4-constraint-enforcement",
+      "phase": "02",
+      "date": "2026-05-06"
+    },
+    {
+      "question": "How much detail belongs in track_relay_catalog.json?",
+      "answer": "Full typed schema mirroring the catalog DSL: { version, generated_at, events: { name: { params: { key: type }, required: [keys] } } }. Types are REQ-01's set (integer/string/float/boolean/datetime). JS validator follows REQ-05 (throw dev, console.warn+drop prod, configurable). Cache-busting via Sprockets fingerprint (Railtie hooks assets:precompile); JS loads /assets/track_relay_catalog-<hash>.json. Dev: file watcher on config/track_relay/**/*.rb re-runs manifest task. TypeScript types generation deferred to Phase 4.",
+      "area": "ga4-manifest-shape",
+      "phase": "02",
+      "date": "2026-05-06"
     }
   ],
   "inferred": [
@@ -53,6 +81,30 @@
       "text": "gemspec required_ruby_version >= 3.2; CI matrix runs Rails 7.1, 7.2, 8.0",
       "priority": "Must-have",
       "source": "Discussion: ruby-rails-matrix"
+    },
+    {
+      "id": "REQ-25",
+      "text": "TrackRelay.subscribe accepts only:/except: event-name filters; filter is evaluated in Subscribers::Base#deliver before the per-subscriber rescue boundary; absence of filter = fires for every event. Catalog DSL never carries vendor-routing keys.",
+      "priority": "Must-have",
+      "source": "Discussion: ga4-routing"
+    },
+    {
+      "id": "REQ-26",
+      "text": "config.client_id_resolvers is an ordered array of callables ([Ga, AhoyVisitor, Session] by default). First non-nil wins; result memoized in TrackRelay::Current.client_id per request. Default Ga resolver parses _ga as last two dot-segments; default Session resolver lazy-UUIDs into session[:track_relay_client_id].",
+      "priority": "Must-have",
+      "source": "Discussion: client-id-chain"
+    },
+    {
+      "id": "REQ-27",
+      "text": "Catalog boot validates event names against snake_case, <=40 chars, and a frozen GA4 reserved-name constant; violations raise unconditionally (catalog refuses to load). Payload-shape rules (<=25 params, param-name format) enforced inside Ga4MeasurementProtocol#deliver per REQ-05.",
+      "priority": "Must-have",
+      "source": "Discussion: ga4-constraint-enforcement"
+    },
+    {
+      "id": "REQ-28",
+      "text": "public/track_relay_catalog.json contains a typed schema per event: { params: { key: type }, required: [keys] } using REQ-01's type set, plus top-level version + generated_at. JS client (@track_relay/client) validates against this manifest before dispatching to gtag, mirroring REQ-05 dev-vs-prod semantics.",
+      "priority": "Must-have",
+      "source": "Discussion: ga4-manifest-shape"
     }
   ],
   "deferred": [

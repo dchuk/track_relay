@@ -1,1 +1,43 @@
-{"schema_version":1,"items":{}}
+{
+  "schema_version": 1,
+  "items": {
+    "ec81aef3": {
+      "summary": "manual GA4 DebugView verification (test/integration/ga4_delivery_retry_test.rb): Requires real G-XXX measurement_id + api_secret — deferred to UAT; webmock-st...",
+      "context": "Known issue from phase 02. Test: manual GA4 DebugView verification. File: test/integration/ga4_delivery_retry_test.rb. Error: Requires real G-XXX measurement_id + api_secret — deferred to UAT; webmock-stubbed unit + integration tests cover the wire contract. Seen 1 time(s). Source: remediation/qa/round-01/R01-SUMMARY.md. Disposition: accepted-process-exception.",
+      "files": [
+        "test/integration/ga4_delivery_retry_test.rb"
+      ],
+      "added": "2026-05-06",
+      "source": "known-issue",
+      "known_issue_signature": {
+        "phase": "02",
+        "phase_dir": ".vbw-planning/phases/02-ga4-subscribers",
+        "test": "manual GA4 DebugView verification",
+        "file": "test/integration/ga4_delivery_retry_test.rb",
+        "error": "Requires real G-XXX measurement_id + api_secret — deferred to UAT; webmock-stubbed unit + integration tests cover the wire contract",
+        "source_kind": "accepted-process-exception",
+        "disposition": "accepted-process-exception",
+        "source_path": "remediation/qa/round-01/R01-SUMMARY.md"
+      }
+    },
+    "05d7522b": {
+      "summary": "manual GA4 Realtime browser smoke (client/test/index.test.js): Requires real measurement_id + browser session — deferred to UAT; happy-dom +...",
+      "context": "Known issue from phase 02. Test: manual GA4 Realtime browser smoke. File: client/test/index.test.js. Error: Requires real measurement_id + browser session — deferred to UAT; happy-dom + vitest cover the contract. Seen 1 time(s). Source: remediation/qa/round-01/R01-SUMMARY.md. Disposition: accepted-process-exception.",
+      "files": [
+        "client/test/index.test.js"
+      ],
+      "added": "2026-05-06",
+      "source": "known-issue",
+      "known_issue_signature": {
+        "phase": "02",
+        "phase_dir": ".vbw-planning/phases/02-ga4-subscribers",
+        "test": "manual GA4 Realtime browser smoke",
+        "file": "client/test/index.test.js",
+        "error": "Requires real measurement_id + browser session — deferred to UAT; happy-dom + vitest cover the contract",
+        "source_kind": "accepted-process-exception",
+        "disposition": "accepted-process-exception",
+        "source_path": "remediation/qa/round-01/R01-SUMMARY.md"
+      }
+    }
+  }
+}

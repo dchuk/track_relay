@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "phase": "02",
+  "issues": [
+    {
+      "test": "manual GA4 DebugView verification",
+      "file": "test/integration/ga4_delivery_retry_test.rb",
+      "error": "Requires real G-XXX measurement_id + api_secret — deferred to UAT; webmock-stubbed unit + integration tests cover the wire contract",
+      "first_seen_in": "02-04-SUMMARY.md",
+      "last_seen_in": "02-VERIFICATION.md",
+      "first_seen_round": 0,
+      "last_seen_round": 0,
+      "times_seen": 2,
+      "source_kind": "registry"
+    },
+    {
+      "test": "manual GA4 Realtime browser smoke",
+      "file": "client/test/index.test.js",
+      "error": "Requires real measurement_id + browser session — deferred to UAT; happy-dom + vitest cover the contract",
+      "first_seen_in": "02-05-SUMMARY.md",
+      "last_seen_in": "02-VERIFICATION.md",
+      "first_seen_round": 0,
+      "last_seen_round": 0,
+      "times_seen": 2,
+      "source_kind": "registry"
+    }
+  ]
+}

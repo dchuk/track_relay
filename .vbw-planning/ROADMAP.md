@@ -7,17 +7,17 @@
 ## Progress
 | Phase | Status | Plans | Tasks | Commits |
 |-------|--------|-------|-------|---------|
-| 01 | ○ Planned |
-| 2 | Pending | 0 | 0 | 0 |
-| 3 | Pending | 0 | 0 | 0 |
-| 4 | Pending | 0 | 0 | 0 |
+| 01 | ● Done |
+| 02 | ● Done |
+| 03 | ● Done | 2 | 10 | 8 |
+| 04 | Pending | 0 | 0 | 0 |
 
 ---
 
 ## Phase List
-- [ ] [Phase 1: Core (MVP)](#phase-1-core-mvp)
-- [ ] [Phase 2: GA4 subscribers](#phase-2-ga4-subscribers)
-- [ ] [Phase 3: Ahoy subscribers](#phase-3-ahoy-subscribers)
+- [x] [Phase 1: Core (MVP)](#phase-1-core-mvp)
+- [x] [Phase 2: GA4 subscribers](#phase-2-ga4-subscribers)
+- [x] [Phase 3: Ahoy subscribers](#phase-3-ahoy-subscribers)
 - [ ] [Phase 4: Polish](#phase-4-polish)
 
 ---
