@@ -75,3 +75,16 @@ export const Ga4Gtag: {
   readonly name: "Ga4Gtag";
   handle(eventName: string, params?: TrackParams): void;
 };
+
+/**
+ * Server-subscriber-shaped wrapper around `window.ahoy.track` —
+ * mirrors the Ruby `TrackRelay::Subscribers::Ahoy#deliver` shape.
+ * Reads the same module-private state populated by `init({...})`.
+ * Validates against the manifest (typed events) and passes untyped
+ * events through unchanged. Missing `window.ahoy.track` warns and
+ * drops the event without throwing.
+ */
+export const AhoyJs: {
+  readonly name: "AhoyJs";
+  handle(eventName: string, params?: TrackParams): void;
+};

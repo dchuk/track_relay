@@ -144,6 +144,50 @@ export const Ga4Gtag = Object.freeze({
   }
 });
 
+/**
+ * Named export: client-side mirror of the server-side
+ * `TrackRelay::Subscribers::Ahoy`. Validates against the manifest and
+ * dispatches via `window.ahoy.track(eventName, params)`. Reads the
+ * same module-private state populated by `init({...})` — no separate
+ * subscriber-side initialization needed.
+ *
+ * Validation semantics match `track()`/`Ga4Gtag.handle()`:
+ *   - Typed event with validation errors → `_onValidationError(errors)`,
+ *     then dev-throws / prod-warns-and-drops (REQ-05 mirror).
+ *   - Untyped event → passes through unchanged (REQ-06 client-side parity).
+ *
+ * Guards on `window.ahoy.track` availability and emits `console.warn`
+ * + drops the event when missing — matches the `window.gtag` guard in
+ * `track()`. Does NOT throw, does NOT call `window.gtag`, does NOT crash
+ * when the host hasn't loaded `ahoy.js`.
+ */
+export const AhoyJs = Object.freeze({
+  name: "AhoyJs",
+  handle(eventName, params = {}) {
+    const schema = _manifest?.events?.[eventName];
+
+    // Typed event — validate. Untyped events pass through (REQ-06).
+    if (schema) {
+      const errors = validateParams(eventName, schema, params);
+      if (errors.length > 0) {
+        _onValidationError?.(errors);
+        if (_env === "development") {
+          throw new Error(`${PREFIX}: ${errors.join("; ")}`);
+        }
+        console.warn(`${PREFIX}:`, ...errors);
+        return; // drop in production
+      }
+    }
+
+    if (typeof window === "undefined" || typeof window.ahoy?.track !== "function") {
+      console.warn(`${PREFIX}: window.ahoy.track not found — event dropped: ${eventName}`);
+      return;
+    }
+
+    window.ahoy.track(eventName, params);
+  }
+});
+
 // Test-only helper: reset module state between tests so suites do not
 // leak `_manifest` / `_configFlushed` flags across cases. NOT part of
 // the public API — `index.d.ts` deliberately omits it.
