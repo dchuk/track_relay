@@ -1,0 +1,42 @@
+# frozen_string_literal: true
+
+# TrackRelay configuration
+# See https://github.com/dchuk/track_relay#readme for full documentation.
+# Run `bundle exec rake track_relay:lint` to audit untyped events.
+
+TrackRelay.configure do |config|
+  # ----- Subscribers --------------------------------------------------------
+  # Logger subscriber: writes every event to Rails.logger and (optionally)
+  # captures untyped events to a JSONL file for audit.
+  config.subscribe TrackRelay::Subscribers::Logger.new
+
+  # Test subscriber: in-memory capture for use with `assert_tracked`.
+  # Prefer `TrackRelay.test_mode!` in test setup over registering this here.
+  # config.subscribe TrackRelay::Subscribers::Test.new if Rails.env.test?
+
+  # ----- GA4 Measurement Protocol (server-side) ----------------------------
+  # config.ga4_measurement_id = ENV.fetch("GA4_MEASUREMENT_ID", nil)
+  # config.ga4_api_secret     = ENV.fetch("GA4_API_SECRET", nil)
+  # config.ga4_use_eu_endpoint = false
+  # config.subscribe TrackRelay::Subscribers::Ga4MeasurementProtocol.new
+
+  # ----- Ahoy (server-side) ------------------------------------------------
+  # Requires the `ahoy_matey` gem in your Gemfile.
+  # config.subscribe TrackRelay::Subscribers::Ahoy.new
+
+  # ----- Untyped events ----------------------------------------------------
+  # Allow tracking calls for events not yet declared in the catalog.
+  # When false, untyped events raise in dev/test and log in production.
+  # config.untyped_events_allowed = true
+
+  # Path for the untyped-events audit log (used by `rake track_relay:lint`).
+  # config.untyped_log_path = Rails.root.join("tmp/track_relay_untyped.jsonl")
+
+  # ----- Validation behavior -----------------------------------------------
+  # In production, subscriber errors are swallowed and logged (default true).
+  # In development/test, they are re-raised after fan-out (default false).
+  # config.swallow_subscriber_errors = false
+
+  # Raise on schema validation errors (default true in dev/test, false in prod).
+  # config.raise_on_validation_error = true
+end
