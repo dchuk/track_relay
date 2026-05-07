@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-07
+
+### Added
+- `rails g track_relay:install` — opinionated scaffold: richly commented
+  initializer (`config/initializers/track_relay.rb`), sample catalog
+  (`config/track_relay/sample.rb`), ApplicationSubscriber base class
+  (`app/track_relay/subscribers/application_subscriber.rb`), and
+  `include TrackRelay::ControllerTracking` injected idempotently into
+  ApplicationController. `bundle exec rake test` passes cleanly
+  immediately after running this generator.
+- `rails g track_relay:event NAME` — scaffolds a typed catalog entry
+  stub at `config/track_relay/<name>.rb`. Each event is its own file;
+  the Railtie merges them at boot.
+- `rails g track_relay:subscriber NAME` — scaffolds a subscriber class
+  stub at `app/track_relay/subscribers/<name>_subscriber.rb`.
+- Getting-started guide at [USAGE.md](USAGE.md).
+- Migration notes at [UPGRADING.md](UPGRADING.md).
+- E2E happy-path test exercising the install generator's output through
+  the live Combustion harness (controller call → Test subscriber capture).
+- README sections: Generators, Ahoy subscriber, Public API stability.
+
+### Changed
+- Targeting 1.0.0 (pending release); public-API stability is
+  established for this release. See
+  [UPGRADING.md](UPGRADING.md) for migration paths from 0.1.0 / 0.2.0
+  / 0.3.0 to 1.0.0.
+
+### Notes
+- **Public API stability:** Public-API stability for `TrackRelay.track`, `.configure`,
+  `.catalog`, `.subscribe`, `.identify`, `.test_mode!`,
+  `TrackRelay::Subscribers::Base` (and the `synchronous!`,
+  `filter only:`, `filter except:` macros),
+  `TrackRelay::Subscribers::{Test,Logger,Ga4MeasurementProtocol,Ahoy}`,
+  `TrackRelay::ControllerTracking`, `TrackRelay::JobTracking`,
+  `TrackRelay::Testing::Helpers`, the catalog DSL
+  (`event`, `integer`, `string`, `float`, `boolean`, `datetime`,
+  `user_property` + `required:`/`max:`/`in:`/`format:`/`sanitize:`
+  validators), the three generators, and the four rake tasks
+  (`track_relay:lint`, `track_relay:lint:json`,
+  `track_relay:lint:ga4`, `track_relay:manifest`) is established for
+  the 1.0.0 release. Internal classes (`EventPayload`, `Instrumenter`,
+  `Dispatcher`, `Catalog`, `Current`, `DeliveryJob`, `ClientId::*`)
+  are not part of the public API contract.
+- No breaking changes from 0.3.0. The `init({ manifestUrl })`
+  JS-client breaking change recorded in 0.3.0 still applies — see the
+  [0.3.0] entry below.
+
 ## [0.3.0] - 2026-05-06
 
 ### Added
@@ -81,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Privacy: untyped JSONL captures param NAMES only (never VALUES) to avoid leaking PII.
 - Naming: `track_relay` availability on RubyGems will be re-validated before 1.0.
 
+[1.0.0]: https://github.com/dchuk/track_relay/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/dchuk/track_relay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/dchuk/track_relay/releases/tag/v0.2.0
 [0.1.0]: https://github.com/dchuk/track_relay/releases/tag/v0.1.0
