@@ -37,6 +37,50 @@ class TrackRelay::ConfigurationTest < ActiveSupport::TestCase
   end
 
   # ---------------------------------------------------------------
+  # client_id_resolvers (Plan 02-02)
+  # ---------------------------------------------------------------
+
+  test "client_id_resolvers defaults to [Ga, AhoyVisitor, Session] in that order" do
+    classes = @config.client_id_resolvers.map(&:class)
+    assert_equal [TrackRelay::ClientId::Ga,
+      TrackRelay::ClientId::AhoyVisitor,
+      TrackRelay::ClientId::Session], classes
+  end
+
+  test "client_id_resolvers default contains exactly 3 resolver instances" do
+    assert_equal 3, @config.client_id_resolvers.size
+    @config.client_id_resolvers.each do |r|
+      assert_respond_to r, :call,
+        "every default resolver must implement #call"
+    end
+  end
+
+  test "client_id_resolvers is reader+writer (assignable to a custom array)" do
+    custom = [Object.new, Object.new]
+    @config.client_id_resolvers = custom
+
+    assert_same custom, @config.client_id_resolvers
+  end
+
+  test "reset! restores client_id_resolvers to the default 3 instances" do
+    @config.client_id_resolvers = [Object.new]
+    @config.reset!
+
+    assert_equal [TrackRelay::ClientId::Ga,
+      TrackRelay::ClientId::AhoyVisitor,
+      TrackRelay::ClientId::Session], @config.client_id_resolvers.map(&:class)
+  end
+
+  test "TrackRelay.reset_config! restores fresh client_id_resolvers" do
+    TrackRelay.config.client_id_resolvers = []
+    TrackRelay.reset_config!
+
+    assert_equal 3, TrackRelay.config.client_id_resolvers.size
+    assert_kind_of TrackRelay::ClientId::Ga,
+      TrackRelay.config.client_id_resolvers.first
+  end
+
+  # ---------------------------------------------------------------
   # subscribe
   # ---------------------------------------------------------------
 

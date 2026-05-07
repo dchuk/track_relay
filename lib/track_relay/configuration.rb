@@ -29,11 +29,18 @@ module TrackRelay
     # @!attribute [rw] raise_on_validation_error
     #   Whether catalog/payload validation errors raise (dev/test) or
     #   are merely logged (prod). Defaults to true in dev/test.
+    # @!attribute [rw] client_id_resolvers
+    #   Ordered chain of `#call(controller:, **)`-callables consulted
+    #   by {ControllerTracking#_resolve_client_id} to populate
+    #   {Current.client_id}. First non-nil result wins. Defaults to
+    #   `[ClientId::Ga.new, ClientId::AhoyVisitor.new,
+    #   ClientId::Session.new]` (Plan 02-02 / REQ-26).
     attr_accessor :swallow_subscriber_errors,
       :untyped_log_path,
       :untyped_events_allowed,
       :force_synchronous,
-      :raise_on_validation_error
+      :raise_on_validation_error,
+      :client_id_resolvers
 
     # @return [Array] registered subscriber instances, in insertion order
     attr_reader :subscribers
@@ -53,6 +60,7 @@ module TrackRelay
       @untyped_events_allowed = true
       @force_synchronous = false
       @raise_on_validation_error = development_or_test_env?
+      @client_id_resolvers = default_client_id_resolvers
     end
 
     # Append a subscriber to the registry.
@@ -80,6 +88,18 @@ module TrackRelay
     end
 
     private
+
+    # Build a fresh default resolver chain. Each call returns a new
+    # array with new resolver instances so a mutated chain in one test
+    # cannot leak into another (the {Session} resolver is otherwise
+    # stateless, but the array container itself must be per-config).
+    def default_client_id_resolvers
+      [
+        ClientId::Ga.new,
+        ClientId::AhoyVisitor.new,
+        ClientId::Session.new
+      ]
+    end
 
     def production_env?
       current_env == "production"
