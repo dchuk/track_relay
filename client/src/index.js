@@ -29,16 +29,31 @@ const PREFIX = "@track_relay/client";
 
 /**
  * Initialize the client by fetching the manifest. Both `measurementId`
- * and `manifestUrl` are required — passing nullish for either throws
- * synchronously BEFORE any fetch is attempted.
+ * and `manifestUrl` are required — passing nullish or empty-string for
+ * either throws SYNCHRONOUSLY (not via a rejected promise) BEFORE any
+ * fetch is attempted, so misconfiguration is loud at the call site.
+ *
+ * Returns a Promise that resolves once the manifest has been fetched
+ * and parsed. Callers can `await init({...})` and `.catch()` network
+ * failures.
+ *
+ * Implementation note: this function is intentionally NOT declared
+ * `async`. An `async` wrapper would convert the synchronous validation
+ * throw into a rejected promise, defeating the purpose. We do
+ * validation synchronously and delegate the fetch to an internal
+ * async helper.
  */
-export async function init({ measurementId, manifestUrl, env = "production", onValidationError } = {}) {
-  if (measurementId == null || manifestUrl == null) {
+export function init({ measurementId, manifestUrl, env = "production", onValidationError } = {}) {
+  if (!measurementId || !manifestUrl) {
     throw new Error(
       `${PREFIX}: init requires both measurementId (e.g. 'G-XXXXXXXXXX') and manifestUrl`
     );
   }
 
+  return _initAsync({ measurementId, manifestUrl, env, onValidationError });
+}
+
+async function _initAsync({ measurementId, manifestUrl, env, onValidationError }) {
   const resp = await fetch(manifestUrl);
   if (!resp.ok) {
     throw new Error(`${PREFIX}: manifest fetch failed (HTTP ${resp.status}) for ${manifestUrl}`);
@@ -102,6 +117,24 @@ function _flushConfigOnce() {
   window.gtag("config", _measurementId, configParams);
   _configFlushed = true;
 }
+
+/**
+ * Named export: client-side mirror of the server-side
+ * `TrackRelay::Subscribers::Ga4MeasurementProtocol`. Validates against
+ * the manifest and dispatches via `window.gtag`. Reads the same
+ * module-private state populated by `init({...})` — no separate
+ * subscriber-side initialization needed.
+ *
+ * `Ga4Gtag.handle(name, params)` is the server-subscriber-shaped
+ * counterpart to plain `track(name, params)`. Use whichever feels
+ * more idiomatic in the host app.
+ */
+export const Ga4Gtag = Object.freeze({
+  name: "Ga4Gtag",
+  handle(eventName, params = {}) {
+    track(eventName, params);
+  }
+});
 
 // Test-only helper: reset module state between tests so suites do not
 // leak `_manifest` / `_configFlushed` flags across cases. NOT part of

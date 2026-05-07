@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { init, track, _resetForTests } from "../src/index.js";
+import { init, track, setClientId, _resetForTests } from "../src/index.js";
 
 const SAMPLE_MANIFEST = {
   version: "0.2.0",
@@ -28,6 +28,37 @@ afterEach(() => {
   delete globalThis.fetch;
   delete window.gtag;
   vi.restoreAllMocks();
+});
+
+describe("init() required-both contract — Fix 3", () => {
+  test("init({}) throws synchronously, message mentions both measurementId and manifestUrl", () => {
+    expect(() => init({})).toThrow(/measurementId.*manifestUrl/);
+  });
+
+  test("init() with no argument throws synchronously", () => {
+    expect(() => init()).toThrow(/measurementId.*manifestUrl/);
+  });
+
+  test("init({manifestUrl}) — missing measurementId — throws", () => {
+    expect(() => init({ manifestUrl: "/m.json" })).toThrow(/measurementId.*manifestUrl/);
+  });
+
+  test("init({measurementId}) — missing manifestUrl — throws", () => {
+    expect(() => init({ measurementId: "G-X" })).toThrow(/measurementId.*manifestUrl/);
+  });
+
+  test("init() with empty-string measurementId is treated as missing", () => {
+    // Defensive: the ERB snippet renders "" when TrackRelay.config.ga4_measurement_id
+    // is unset — the JS package must surface that as a config error, not silently
+    // dispatch events to an empty property id.
+    expect(() => init({ measurementId: "", manifestUrl: "/m.json" })).toThrow(/measurementId/);
+  });
+
+  test("init() with nullish measurementId throws BEFORE attempting fetch", () => {
+    globalThis.fetch = vi.fn();
+    expect(() => init({ measurementId: null, manifestUrl: "/m.json" })).toThrow();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("init() happy path", () => {
@@ -195,6 +226,37 @@ describe("track() validation — REQ-05 mirror", () => {
 
     expect(() => track("flag", { on: true })).not.toThrow();
     expect(() => track("flag", { on: "true" })).toThrow(/on.*boolean/);
+  });
+
+  test("gtag('config', measurementId, {client_id}) fires once per page lifecycle", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-PAGELIFE", manifestUrl: "/m.json" });
+    setClientId("123.456");
+
+    track("purchase", { value: 1, currency: "USD" });
+    track("purchase", { value: 2, currency: "USD" });
+    track("purchase", { value: 3, currency: "USD" });
+
+    const configCalls = window.gtag.mock.calls.filter((c) => c[0] === "config");
+    expect(configCalls).toHaveLength(1);
+    expect(configCalls[0]).toEqual(["config", "G-PAGELIFE", { client_id: "123.456" }]);
+
+    const eventCalls = window.gtag.mock.calls.filter((c) => c[0] === "event");
+    expect(eventCalls).toHaveLength(3);
+  });
+
+  test("setClientId() AFTER init causes the next track() to re-emit gtag('config')", async () => {
+    mockFetchManifest();
+    await init({ measurementId: "G-RECONFIG", manifestUrl: "/m.json" });
+
+    track("purchase", { value: 1, currency: "USD" }); // flushes config with no client_id
+    setClientId("999.000");
+    track("purchase", { value: 2, currency: "USD" }); // re-flushes with new client_id
+
+    const configCalls = window.gtag.mock.calls.filter((c) => c[0] === "config");
+    expect(configCalls).toHaveLength(2);
+    expect(configCalls[0]).toEqual(["config", "G-RECONFIG", {}]);
+    expect(configCalls[1]).toEqual(["config", "G-RECONFIG", { client_id: "999.000" }]);
   });
 
   test("datetime type accepts ISO8601 string or Date instance", async () => {
