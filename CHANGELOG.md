@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Subscriber-side `only:` / `except:` event-name filters via the `filter` class DSL or the new `TrackRelay.subscribe(klass_or_instance, only:, except:)` registration helper. Filters short-circuit at the top of `Subscribers::Base#handle` BEFORE the sync/async branch and BEFORE `safe_deliver`'s rescue boundary, so a filtered event with a buggy `#deliver` neither runs nor logs. Per-instance overrides on `TrackRelay.subscribe` are stored on the singleton class so they do not mutate either the class-level defaults or other instances of the same subscriber.
+- `webmock ~> 3.23` as a development dependency. `test_helper.rb` requires `webmock/minitest` and calls `WebMock.disable_net_connect!(allow_localhost: true)` so HTTP-stubbed subscriber tests (Phase 02 GA4 measurement protocol) can register expected calls without leaking to the live network.
+
 ## [0.1.0] - 2026-05-06
 
 ### Added

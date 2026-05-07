@@ -170,14 +170,7 @@ module TrackRelay
   # @return [Subscribers::Base] the registered subscriber instance
   def self.subscribe(subscriber_or_class, only: nil, except: nil)
     instance = subscriber_or_class.is_a?(Class) ? subscriber_or_class.new : subscriber_or_class
-
-    if !only.nil?
-      instance.singleton_class.instance_variable_set(:@only_events_override, Set.new(Array(only).map(&:to_sym)))
-    end
-    if !except.nil?
-      instance.singleton_class.instance_variable_set(:@except_events_override, Set.new(Array(except).map(&:to_sym)))
-    end
-
+    instance.set_filter_overrides!(only: only, except: except)
     config.subscribe(instance)
     instance
   end

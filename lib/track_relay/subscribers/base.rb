@@ -67,8 +67,20 @@ module TrackRelay
       #   this set are dropped.
       # @return [void]
       def self.filter(only: nil, except: nil)
-        self.only_events = only.nil? ? nil : Set.new(Array(only).map(&:to_sym))
-        self.except_events = except.nil? ? nil : Set.new(Array(except).map(&:to_sym))
+        self.only_events = coerce_event_set(only)
+        self.except_events = coerce_event_set(except)
+      end
+
+      # Coerce a filter input (Array<Symbol|String>, Set, single Symbol,
+      # or nil) into a `Set<Symbol>` or `nil`. Internal helper shared by
+      # the class-level {.filter} DSL and the per-instance override path
+      # ({Base#set_filter_overrides!}, used by {TrackRelay.subscribe}).
+      #
+      # @param value [Array, Set, Symbol, String, nil]
+      # @return [Set<Symbol>, nil]
+      def self.coerce_event_set(value)
+        return nil if value.nil?
+        Set.new(Array(value).map(&:to_sym))
       end
 
       # Implement in subclasses to receive an {EventPayload}.
@@ -121,6 +133,29 @@ module TrackRelay
       rescue => e
         log_failure(e)
         e
+      end
+
+      # Set per-instance `only:` / `except:` filter overrides on this
+      # subscriber. Used by {TrackRelay.subscribe} so a single subscriber
+      # class can be registered multiple times with different filters.
+      #
+      # Each non-nil argument is coerced via {Base.coerce_event_set} and
+      # stored on the instance's singleton class so it does not bleed
+      # across instances or mutate the class-level defaults declared via
+      # {.filter}. Passing `nil` for either argument leaves that override
+      # untouched (the instance falls through to the class default).
+      #
+      # @param only [Array<Symbol, String>, Set, nil]
+      # @param except [Array<Symbol, String>, Set, nil]
+      # @return [self]
+      def set_filter_overrides!(only: nil, except: nil)
+        unless only.nil?
+          singleton_class.instance_variable_set(:@only_events_override, self.class.coerce_event_set(only))
+        end
+        unless except.nil?
+          singleton_class.instance_variable_set(:@except_events_override, self.class.coerce_event_set(except))
+        end
+        self
       end
 
       # Read the effective `only:` filter for this instance — the
