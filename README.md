@@ -4,7 +4,7 @@ Unified, typed event tracking for Rails apps. One catalog, multiple destinations
 
 ## Status
 
-0.1.0 — core MVP (catalog DSL, AS::Notifications dispatch, Test/Logger subscribers, untyped-event linter, Minitest assertions, RSpec matchers). GA4 and Ahoy adapters land in 0.2.0 / 0.3.0.
+0.2.0 — adds the GA4 Measurement Protocol server-side subscriber, JSON manifest generation, configurable `client_id` resolver chain, subscriber-side `only:` / `except:` filters, and the `@track_relay/client` JS package for client-side gtag dispatch. Ahoy lands in 0.3.0.
 
 ## Why
 
@@ -15,12 +15,20 @@ Modern Rails apps that want both marketing analytics (GA4) and product analytics
 Add to your Gemfile:
 
 ```ruby
-gem "track_relay", "~> 0.1.0"
+gem "track_relay", "~> 0.2.0"
 ```
 
 Then `bundle install`.
 
 Requires Ruby 3.2+ and Rails 7.1, 7.2, or 8.0.
+
+For client-side tracking, also install the companion JS package:
+
+```bash
+npm install @track_relay/client
+```
+
+See [GA4 + client-side tracking](#ga4--client-side-tracking) below.
 
 ## Quick start
 
@@ -234,6 +242,94 @@ If `config.untyped_log_path` is unset, both rake tasks abort with a nonzero exit
 
 The JSONL captures only sorted, stringified parameter NAMES (never values) for the same privacy reason.
 
+## GA4 + client-side tracking
+
+0.2.0 ships a complete GA4 path — server-side via `Subscribers::Ga4MeasurementProtocol`, client-side via the [`@track_relay/client`](client/README.md) JS package. They share one catalog and one validation contract.
+
+### Server-side: GA4 Measurement Protocol subscriber
+
+```ruby
+# config/initializers/track_relay.rb
+TrackRelay.configure do |c|
+  c.ga4_measurement_id = ENV.fetch("GA4_MEASUREMENT_ID")
+  c.ga4_api_secret     = ENV.fetch("GA4_API_SECRET")
+  # c.ga4_use_eu_endpoint = true  # opt-in for EU residency
+
+  # Send all events that need server-side fan-out
+  c.subscribe TrackRelay::Subscribers::Ga4MeasurementProtocol.new
+end
+```
+
+The subscriber POSTs to `https://www.google-analytics.com/mp/collect` with the canonical `{client_id, user_id?, timestamp_micros, events: [{name, params}]}` body. Async-by-default through `TrackRelay::DeliveryJob` (an `ActiveJob::Base` subclass) — typed `DeliveryRetriableError` / `DeliveryDiscardableError` exceptions wire `retry_on :polynomially_longer, attempts: 5` and `discard_on` so 5xx errors retry and 4xx errors are dropped without retrying. Hosts can opt the subscriber into synchronous delivery for in-process consistency: `Ga4MeasurementProtocol.synchronous!`.
+
+When either credential is `nil` at delivery time the subscriber emits a single `Rails.logger.warn` and returns — gem-loaded-but-not-configured apps must not crash.
+
+Subscriber-side filters via `only:` / `except:` keep noisy events out of GA4:
+
+```ruby
+TrackRelay.subscribe(
+  TrackRelay::Subscribers::Ga4MeasurementProtocol.new,
+  only: %i[purchase signup outbound_click]
+)
+```
+
+### `client_id` resolver chain
+
+`TrackRelay::Current.client_id` is resolved via a configurable chain of `client_id_resolvers`. The default chain checks the GA `_ga` cookie, then any Ahoy visitor token, then mints a session-stable UUID into `session[:track_relay_client_id]` so visitors without a `_ga` cookie still get a stable identifier. First non-nil wins; per-resolver exceptions are isolated so a single buggy resolver cannot block the chain.
+
+```ruby
+TrackRelay.configure do |c|
+  # Prepend a custom resolver for native-app traffic
+  c.client_id_resolvers.unshift(->(req) { req.headers["X-Native-App-Id"] })
+end
+```
+
+### JSON manifest
+
+`rake track_relay:manifest` writes a typed JSON snapshot of the catalog to `public/track_relay_catalog.json`:
+
+```json
+{
+  "version": "0.2.0",
+  "generated_at": "2026-05-06T12:00:00Z",
+  "events": {
+    "purchase": {
+      "params": {"value": "float", "currency": "string", "coupon": "string"},
+      "required": ["value", "currency"]
+    }
+  }
+}
+```
+
+The Railtie auto-runs `track_relay:manifest` before `assets:precompile` (production / CI) and regenerates the file on every `to_prepare` reload in development. The manifest is the contract the JS package consumes for client-side validation.
+
+### Client-side: `@track_relay/client`
+
+The JS package fetches the manifest at boot and dispatches events via `window.gtag` after validating against the same typed schema as the server. The Rails layer owns the configuration; the layout wires both `measurementId` and `manifestUrl`:
+
+```erb
+<%# app/views/layouts/application.html.erb %>
+<script type="module">
+  import { init } from "@track_relay/client";
+  init({
+    measurementId: "<%= TrackRelay.config.ga4_measurement_id %>",
+    manifestUrl: "<%= asset_path('track_relay_catalog.json') %>"
+  });
+</script>
+```
+
+Then track events from anywhere in your JS:
+
+```javascript
+import { track } from "@track_relay/client";
+
+document.querySelector("#buy-button").addEventListener("click", () => {
+  track("purchase", { value: 9.99, currency: "USD" });
+});
+```
+
+Validation behavior mirrors REQ-05: in development a missing required field or wrong type throws an Error; in production it calls `console.warn` and silently drops the event. Untyped events (not in the manifest) pass through unchanged. See [`client/README.md`](client/README.md) for the full API and the `Ga4Gtag` named export.
+
 ## Compatibility
 
 - Ruby 3.2, 3.3, 3.4
@@ -244,7 +340,7 @@ CI runs the full Ruby × Rails matrix (9 combinations) on every push via Apprais
 
 ## Roadmap
 
-- 0.2.0 — GA4 Measurement Protocol subscriber + JSON manifest for client-side tracking
+- 0.2.0 — GA4 Measurement Protocol subscriber + JSON manifest + `@track_relay/client` JS package (shipped)
 - 0.3.0 — Ahoy subscriber (server + client)
 - 0.4.0 — install / event / subscriber generators, more built-in subscribers (PostHog, Plausible, webhooks)
 

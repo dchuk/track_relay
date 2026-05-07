@@ -32,3 +32,22 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
       - run: bundle exec standardrb --no-fix
+
+  js-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      # Build runs BEFORE test so test/build_smoke.test.js sees a
+      # populated dist/. Without this ordering the smoke test would
+      # fail every CI run.
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
