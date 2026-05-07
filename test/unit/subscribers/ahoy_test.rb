@@ -80,7 +80,7 @@ class TrackRelay::Subscribers::AhoyTest < ActiveSupport::TestCase
     result = @subscriber.safe_deliver(build_payload(:purchase, {value: 9.99}))
 
     assert_nil result, "safe_deliver returns nil on success"
-    mock_tracker.verify
+    assert mock_tracker.verify
   end
 
   # ---- Skip path: controller does not respond to :ahoy ---------------
@@ -143,7 +143,7 @@ class TrackRelay::Subscribers::AhoyTest < ActiveSupport::TestCase
 
     @subscriber.safe_deliver(build_payload(:purchase))
 
-    mock_tracker.verify
+    assert mock_tracker.verify
   end
 
   # ---- Filter gate runs BEFORE deliver -------------------------------
@@ -171,7 +171,7 @@ class TrackRelay::Subscribers::AhoyTest < ActiveSupport::TestCase
     result = sub.handle(build_payload(:page_view))
 
     assert_nil result, "filtered event returns nil from #handle"
-    mock_tracker.verify  # zero expectations, zero calls — passes
+    assert mock_tracker.verify, "tracker.track must not be called for filtered events"
   end
 
   # ---- Synchronous flag is set ---------------------------------------
