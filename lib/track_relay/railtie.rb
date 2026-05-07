@@ -3,6 +3,10 @@
 require "rails/railtie"
 require "track_relay/catalog"
 require "track_relay/dispatcher"
+# Direct require of Manifest (rather than going through `lib/track_relay.rb`)
+# keeps this plan file-disjoint with Plan 02-02 in the same wave —
+# Plan 02-02 owns the umbrella file's require list.
+require "track_relay/manifest"
 
 module TrackRelay
   # Rails integration boundary for the gem.
@@ -42,10 +46,20 @@ module TrackRelay
       # Clear before reload so editing config/track_relay/foo.rb in dev
       # produces a clean catalog rebuild rather than double-registration
       # errors from Catalog.register's defensive duplicate guard.
+      #
+      # In development, regenerate `public/track_relay_catalog.json`
+      # after the catalog rebuild so the JS client picks up DSL changes
+      # without a server restart. The test env is excluded explicitly to
+      # avoid every-test churn — production builds the manifest via
+      # `assets:precompile` (see the next initializer).
       app.config.to_prepare do
         TrackRelay::Catalog.clear!
         Dir.glob("#{catalog_dir}/**/*.rb").sort.each do |file|
           load file
+        end
+
+        if Rails.env.development? && TrackRelay::Catalog.all.any?
+          TrackRelay::Manifest.write!
         end
       end
     end
@@ -53,6 +67,23 @@ module TrackRelay
     initializer "track_relay.start_dispatcher" do |app|
       app.config.after_initialize do
         TrackRelay::Dispatcher.start!
+      end
+    end
+
+    # Chain `track_relay:manifest` as a prerequisite of
+    # `assets:precompile` so production / CI builds always ship a fresh
+    # `public/track_relay_catalog.json`. The conditional avoids a
+    # Rake::Task-not-defined error in non-asset apps (API-only Rails
+    # without Sprockets/Propshaft). Mirrors cssbundling-rails /
+    # jsbundling-rails patterns.
+    initializer "track_relay.enhance_assets_precompile" do
+      # `defined?(Rake)` guards against API-only Rails apps that have
+      # never `require "rake"`-d at boot — the initializer is a no-op
+      # there. When Rake IS loaded, the `task_defined?` check then
+      # silently skips when the host app uses neither Sprockets nor
+      # Propshaft.
+      if defined?(Rake) && Rake::Task.task_defined?("assets:precompile")
+        Rake::Task["assets:precompile"].enhance(["track_relay:manifest"])
       end
     end
 
