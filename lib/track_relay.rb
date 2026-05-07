@@ -146,6 +146,42 @@ module TrackRelay
     Instrumenter.identify(user, **user_properties)
   end
 
+  # Register a subscriber with optional per-instance event-name filters.
+  #
+  #   TrackRelay.subscribe(MySubscriber)
+  #   TrackRelay.subscribe(MySubscriber, only: %i[purchase sign_up])
+  #   TrackRelay.subscribe(MySubscriber, except: %i[page_view])
+  #   TrackRelay.subscribe(MySubscriber.new, only: %i[purchase])
+  #
+  # Accepts either a subscriber class (instantiated via `.new`) or a
+  # pre-built instance. When `only:` or `except:` is non-nil, the value
+  # is coerced to `Set<Symbol>` and stored as a SINGLETON-CLASS override
+  # on the registered instance. Other instances of the same class — and
+  # the class-level defaults declared via `filter only:` / `filter
+  # except:` — are NOT mutated.
+  #
+  # The instance is appended to {Configuration#subscribers} via
+  # {Configuration#subscribe} and returned, so callers can hold a
+  # reference (e.g. for tests).
+  #
+  # @param subscriber_or_class [Class, Subscribers::Base]
+  # @param only [Array<Symbol, String>, nil] allow-list override
+  # @param except [Array<Symbol, String>, nil] deny-list override
+  # @return [Subscribers::Base] the registered subscriber instance
+  def self.subscribe(subscriber_or_class, only: nil, except: nil)
+    instance = subscriber_or_class.is_a?(Class) ? subscriber_or_class.new : subscriber_or_class
+
+    if !only.nil?
+      instance.singleton_class.instance_variable_set(:@only_events_override, Set.new(Array(only).map(&:to_sym)))
+    end
+    if !except.nil?
+      instance.singleton_class.instance_variable_set(:@except_events_override, Set.new(Array(except).map(&:to_sym)))
+    end
+
+    config.subscribe(instance)
+    instance
+  end
+
   # Top-level entry point for the catalog DSL.
   #
   # Evaluates `block` against a {DSL::EventBuilder} so callers can use
