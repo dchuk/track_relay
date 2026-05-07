@@ -30,6 +30,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "rails", ">= 7.1"
 
+  spec.add_development_dependency "ahoy_matey"
   spec.add_development_dependency "appraisal"
   spec.add_development_dependency "combustion", "~> 1.3"
   spec.add_development_dependency "minitest", "~> 5.16"
