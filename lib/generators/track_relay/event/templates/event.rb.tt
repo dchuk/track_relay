@@ -1,0 +1,21 @@
+# frozen_string_literal: true
+
+# <%= class_name %> event — defined here so the track_relay Railtie
+# autoloads it from config/track_relay/ at boot.
+#
+# Track this event from a controller or job:
+#   track :<%= file_name %>, # required + optional params here
+#
+# Run `bundle exec rake track_relay:lint:ga4` to audit GA4 constraints.
+
+TrackRelay.catalog do
+  event :<%= file_name %> do
+    # Uncomment and edit:
+    # integer :id,    required: true
+    # string  :label, required: true
+    # string  :category
+    # float   :value
+    # boolean :active
+    # datetime :occurred_at
+  end
+end
