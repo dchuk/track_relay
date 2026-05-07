@@ -1,0 +1,28 @@
+# frozen_string_literal: true
+
+# <%= class_name %>Subscriber — custom track_relay subscriber.
+#
+# Register in config/initializers/track_relay.rb:
+#
+#   TrackRelay.configure do |config|
+#     config.subscribe <%= class_name %>Subscriber.new
+#   end
+#
+# If you ran `rails g track_relay:install`, you can subclass
+# ApplicationSubscriber instead of TrackRelay::Subscribers::Base
+# to share behavior across your subscribers.
+class <%= class_name %>Subscriber < TrackRelay::Subscribers::Base
+  # Uncomment to run inline instead of via DeliveryJob:
+  # synchronous!
+
+  # Filter to specific events only:
+  # filter only: %i[<%= file_name %>]
+
+  # payload.name      => :event_name (Symbol)
+  # payload.params    => { key: value, ... } (typed and coerced)
+  # payload.context   => { controller:, action:, client_id:, user:, ... }
+  # payload.timestamp => Time
+  def deliver(payload)
+    # TODO: send payload to your destination
+  end
+end
