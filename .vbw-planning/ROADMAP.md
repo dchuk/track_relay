@@ -10,7 +10,7 @@
 | 01 | ● Done |
 | 02 | ● Done |
 | 03 | ● Done | 2 | 10 | 8 |
-| 04 | Pending | 0 | 0 | 0 |
+| 04 | ● Done | 5 | 22 | 17 |
 
 ---
 
@@ -18,7 +18,7 @@
 - [x] [Phase 1: Core (MVP)](#phase-1-core-mvp)
 - [x] [Phase 2: GA4 subscribers](#phase-2-ga4-subscribers)
 - [x] [Phase 3: Ahoy subscribers](#phase-3-ahoy-subscribers)
-- [ ] [Phase 4: Polish](#phase-4-polish)
+- [x] [Phase 4: Polish](#phase-4-polish)
 
 ---
 
@@ -74,15 +74,16 @@
 
 ## Phase 4: Polish
 
-**Goal:** Generators (install, event, subscriber), additional v2 subscribers (PostHog, Plausible, Webhook), optional engine mount for ad-blocker resilience, performance benchmarks, custom Rubocop cop for raw gtag/ahoy.track calls. Path to 1.0.0.
+**Goal:** Generators (`track_relay:install`, `track_relay:event`, `track_relay:subscriber`) + documentation audit + real-world integration verification through the existing `test/internal` Combustion harness. Closes out the Core (MVP) milestone by validating readiness to cut 1.0.0 immediately after Phase 4 UAT passes. Engine mount, performance benchmarks, custom Rubocop cop, and additional v2 subscribers (REQ-18, REQ-19) defer to a follow-up post-1.0.0 milestone — see `phases/04-polish/04-CONTEXT.md` Deferred Ideas.
 
-**Requirements:** REQ-15, REQ-19
+**Requirements:** REQ-15, REQ-17 (1.0.0 cut)
 
 **Success Criteria:**
-- rails g track_relay:install scaffolds the initializer, catalog directory, and ApplicationController include
-- rails g track_relay:event and track_relay:subscriber generators produce working scaffolds
-- At least one v2 subscriber (PostHog or Plausible) shipped
-- Benchmarks documented; 1.0.0 released
+- `rails g track_relay:install` scaffolds the initializer, catalog directory, and ApplicationController include
+- `rails g track_relay:event` and `rails g track_relay:subscriber` generators produce working scaffolds (run `bundle exec rake test` cleanly out of the box)
+- Documentation audit complete: README, CHANGELOG, getting-started guide reviewed and updated for 1.0.0 readiness
+- End-to-end happy-path verified inside `test/internal` (Combustion): catalog DSL → tracked event → at least one real subscriber emit, exercised through the full Railtie/ApplicationController concern path
+- 1.0.0 cut after Phase 4 UAT passes (post-verification step inside this milestone)
 
 **Dependencies:** Phase 3
 

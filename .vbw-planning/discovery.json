@@ -55,6 +55,34 @@
       "area": "ga4-manifest-shape",
       "phase": "02",
       "date": "2026-05-06"
+    },
+    {
+      "question": "How should Phase 4 be scoped (one fat phase vs split vs new milestone)?",
+      "answer": "Trim Phase 4 to generators + doc audit + dummy-app integration test via test/internal Combustion harness. 1.0.0 cuts AFTER Phase 4 UAT passes, in the same Core (MVP) milestone. Engine mount, performance benchmarks, custom Rubocop cop, and additional v2 subscribers (PostHog/Plausible/Webhook/Mixpanel/Segment) defer to a follow-up post-1.0.0 milestone.",
+      "area": "phase-04-scope",
+      "phase": "04",
+      "date": "2026-05-06"
+    },
+    {
+      "question": "Generator UX style for track_relay:install / :event / :subscriber generators",
+      "answer": "Opinionated Devise/ActiveAdmin-style scaffolds. Install generator emits a richly commented initializer + a working sample catalog (config/track_relay/sample.rb) + a working sample subscriber. Event/subscriber generators produce opinionated working stubs. bundle exec rake test must pass cleanly immediately after rails g track_relay:install.",
+      "area": "phase-04-generator-ux",
+      "phase": "04",
+      "date": "2026-05-06"
+    },
+    {
+      "question": "Doc audit scope for 1.0.0 readiness",
+      "answer": "Standard Ruby-gem 1.0.0 set: README expansion + CHANGELOG audit in Keep-a-Changelog format with 1.0.0 entry + public-API stability statement + getting-started guide (doc/usage.md or USAGE.md) + migration notes (0.1.0 -> 0.2.0 -> 0.3.0 -> 1.0.0). YARD/RDoc generation and published doc site out of scope.",
+      "area": "phase-04-doc-audit",
+      "phase": "04",
+      "date": "2026-05-06"
+    },
+    {
+      "question": "Integration test scope for generators in test/internal",
+      "answer": "Layered: structural assertions per generator (file exists, content matches expected shape, frontmatter/keys correct) + ONE happy-path E2E test running track_relay:install against a clean Combustion harness, exercising a tracked call from a controller, asserting Test subscriber captured the event with correct typed payload.",
+      "area": "phase-04-test-scope",
+      "phase": "04",
+      "date": "2026-05-06"
     }
   ],
   "inferred": [
@@ -122,6 +150,26 @@
       "idea": "Custom Rubocop cop flagging raw gtag/ahoy.track calls",
       "mentioned_during": "Phase 1 discussion",
       "date": "2026-05-05"
+    },
+    {
+      "idea": "Engine mount for ad-blocker resilience (mountable Rails engine with first-party /track_relay/events POST endpoint, REQ-19)",
+      "mentioned_during": "Phase 4 discussion",
+      "date": "2026-05-06"
+    },
+    {
+      "idea": "Performance benchmarks (per-event dispatch, subscriber throughput, manifest generation, end-to-end Rails impact)",
+      "mentioned_during": "Phase 4 discussion",
+      "date": "2026-05-06"
+    },
+    {
+      "idea": "Custom Rubocop cop for raw gtag/ahoy.track calls (likely rubocop-track_relay companion gem per RuboCop plugin convention)",
+      "mentioned_during": "Phase 4 discussion",
+      "date": "2026-05-06"
+    },
+    {
+      "idea": "Additional v2 subscribers: PostHog, Plausible, Webhook, Mixpanel, Segment (REQ-18)",
+      "mentioned_during": "Phase 4 discussion",
+      "date": "2026-05-06"
     }
   ]
 }
