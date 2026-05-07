@@ -28,12 +28,47 @@ module TrackRelay
     class Base
       class_attribute :synchronous, default: false
 
+      # Subscriber-side event-name filters (Plan 02-01). Both default to
+      # `nil`, which means "no filter — receive every event" (Phase 1
+      # behavior). When set, they are stored as `Set<Symbol>` by the
+      # {.filter} class DSL and consulted by {#filtered?} at the top of
+      # {#handle}, BEFORE the sync/async branch.
+      #
+      # The class-level value is the default for instances of this
+      # subscriber; {TrackRelay.subscribe} (Plan 02-01) overrides per
+      # instance via the singleton-class accessors so two instances of
+      # the same subscriber can carry different filters without
+      # cross-talk.
+      class_attribute :only_events, default: nil
+      class_attribute :except_events, default: nil
+
       # Mark this subclass as synchronous. Calls to {#handle} will run
       # `safe_deliver` inline rather than enqueueing a {DeliveryJob}.
       #
       # @return [Boolean] `true`
       def self.synchronous!
         self.synchronous = true
+      end
+
+      # Class-level DSL for declaring an event-name filter.
+      #
+      #   class MySubscriber < TrackRelay::Subscribers::Base
+      #     filter only: %i[purchase sign_up]
+      #   end
+      #
+      # `only:` and `except:` are mutually exclusive in spirit but not
+      # enforced as such — if both are set, `only:` wins (an event must
+      # be in the allow-list AND not in the deny-list to pass). Pass
+      # `nil` to clear a previously set filter.
+      #
+      # @param only [Array<Symbol, String>, nil] allow-list; if non-nil,
+      #   only events whose name is in this set are delivered.
+      # @param except [Array<Symbol, String>, nil] deny-list; events in
+      #   this set are dropped.
+      # @return [void]
+      def self.filter(only: nil, except: nil)
+        self.only_events = only.nil? ? nil : Set.new(Array(only).map(&:to_sym))
+        self.except_events = except.nil? ? nil : Set.new(Array(except).map(&:to_sym))
       end
 
       # Implement in subclasses to receive an {EventPayload}.
@@ -51,9 +86,17 @@ module TrackRelay
       # failure, or `nil` on the async path (the job runs later — its
       # eventual failure mode is handled inside {DeliveryJob#perform}).
       #
+      # **Filter gate (Plan 02-01):** if `only_events` / `except_events`
+      # exclude `payload.name`, return `nil` immediately — BEFORE the
+      # sync/async branch and BEFORE `safe_deliver`'s rescue boundary.
+      # A filtered event with a buggy `#deliver` therefore neither runs
+      # nor logs.
+      #
       # @param payload [EventPayload]
       # @return [nil, StandardError]
       def handle(payload)
+        return nil if filtered?(payload.name.to_sym)
+
         if self.class.synchronous || TrackRelay.config.force_synchronous
           safe_deliver(payload)
         else
@@ -80,7 +123,44 @@ module TrackRelay
         e
       end
 
+      # Read the effective `only:` filter for this instance — the
+      # singleton override (set by {TrackRelay.subscribe}) when present,
+      # otherwise the class-level default declared via {.filter}.
+      #
+      # @return [Set<Symbol>, nil]
+      def only_events
+        if singleton_class.instance_variable_defined?(:@only_events_override)
+          singleton_class.instance_variable_get(:@only_events_override)
+        else
+          self.class.only_events
+        end
+      end
+
+      # Read the effective `except:` filter for this instance — the
+      # singleton override (set by {TrackRelay.subscribe}) when present,
+      # otherwise the class-level default declared via {.filter}.
+      #
+      # @return [Set<Symbol>, nil]
+      def except_events
+        if singleton_class.instance_variable_defined?(:@except_events_override)
+          singleton_class.instance_variable_get(:@except_events_override)
+        else
+          self.class.except_events
+        end
+      end
+
       private
+
+      # @param event_name [Symbol] coerced from `payload.name`
+      # @return [Boolean] true ⇒ drop this event before delivery
+      def filtered?(event_name)
+        only = only_events
+        except = except_events
+        return false if only.nil? && except.nil?
+        return true if only && !only.include?(event_name)
+        return true if except&.include?(event_name)
+        false
+      end
 
       def log_failure(e)
         return unless defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
