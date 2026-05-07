@@ -30,34 +30,39 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("init() required-both contract — Fix 3", () => {
-  test("init({}) throws synchronously, message mentions both measurementId and manifestUrl", () => {
-    expect(() => init({})).toThrow(/measurementId.*manifestUrl/);
+describe("init() manifestUrl-required contract — 0.3.0 AhoyJs-only support", () => {
+  test("init({}) throws synchronously, message mentions manifestUrl only", () => {
+    expect(() => init({})).toThrow(/manifestUrl/);
+    expect(() => init({})).not.toThrow(/measurementId/);
   });
 
   test("init() with no argument throws synchronously", () => {
-    expect(() => init()).toThrow(/measurementId.*manifestUrl/);
+    expect(() => init()).toThrow(/manifestUrl/);
+    expect(() => init()).not.toThrow(/measurementId/);
   });
 
-  test("init({manifestUrl}) — missing measurementId — throws", () => {
-    expect(() => init({ manifestUrl: "/m.json" })).toThrow(/measurementId.*manifestUrl/);
+  test("init({ manifestUrl }) — no measurementId — resolves (AhoyJs-only host)", async () => {
+    mockFetchManifest();
+    await expect(init({ manifestUrl: "/m.json" })).resolves.toBeUndefined();
   });
 
   test("init({measurementId}) — missing manifestUrl — throws", () => {
-    expect(() => init({ measurementId: "G-X" })).toThrow(/measurementId.*manifestUrl/);
+    expect(() => init({ measurementId: "G-X" })).toThrow(/manifestUrl/);
+    expect(() => init({ measurementId: "G-X" })).not.toThrow(/measurementId/);
   });
 
-  test("init() with empty-string measurementId is treated as missing", () => {
-    // Defensive: the ERB snippet renders "" when TrackRelay.config.ga4_measurement_id
-    // is unset — the JS package must surface that as a config error, not silently
-    // dispatch events to an empty property id.
-    expect(() => init({ measurementId: "", manifestUrl: "/m.json" })).toThrow(/measurementId/);
+  test("init() with empty-string measurementId — manifestUrl present — resolves (AhoyJs-only host)", async () => {
+    mockFetchManifest();
+    await expect(
+      init({ measurementId: "", manifestUrl: "/m.json" })
+    ).resolves.toBeUndefined();
   });
 
-  test("init() with nullish measurementId throws BEFORE attempting fetch", () => {
-    globalThis.fetch = vi.fn();
-    expect(() => init({ measurementId: null, manifestUrl: "/m.json" })).toThrow();
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+  test("init() with nullish measurementId — manifestUrl present — resolves (AhoyJs-only host)", async () => {
+    mockFetchManifest();
+    await expect(
+      init({ measurementId: null, manifestUrl: "/m.json" })
+    ).resolves.toBeUndefined();
   });
 });
 
