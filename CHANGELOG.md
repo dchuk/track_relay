@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-06
+
+### Added
+
+- `TrackRelay::Subscribers::Ahoy` — server-side synchronous subscriber that routes catalog events through `controller.ahoy.track(payload.name.to_s, payload.params)` (Ahoy's only public tracking surface — there is no `Ahoy::Visit#track`). Duck-types `controller.respond_to?(:ahoy, true)` so the gem loads cleanly in non-Ahoy host apps; calls without a controller in scope (background jobs, rake tasks, console) skip-log via `Rails.logger.warn` rather than fabricate a write. Stateless — no constructor args; reads `TrackRelay::Current.controller` directly at deliver time (safe on the synchronous path, mandatory because `payload.context[:controller]` is the controller class name as a String, not the live instance).
+- `AhoyJs` named export in `@track_relay/client` — client-side mirror of `Subscribers::Ahoy`. `Object.freeze({ name: "AhoyJs", handle(eventName, params) })` shape matches the existing `Ga4Gtag` export. Validates against the manifest (typed events: dev-throws / prod-warns-and-drops per REQ-05; untyped passes through per REQ-06), then dispatches via `window.ahoy.track(eventName, params)`. Guards on `typeof window.ahoy?.track === "function"` and emits `console.warn` + drops when missing — never throws when `ahoy.js` is absent.
+- `ahoy_matey` added as a development dependency in `track_relay.gemspec`. Resolves to 5.4.2 under Rails 7.1 and 5.5.0 under Rails 7.2 / 8.0; lockfiles in `gemfiles/` confirm. The gem is required by the unit/integration test suites only; runtime hosts pull `ahoy_matey` themselves via their own Gemfile.
+
+### Changed (BREAKING)
+
+- `init({ manifestUrl })` no longer requires `measurementId`. Hosts using only `AhoyJs` (no GA4 subscriber in use) can now omit the GA4 measurement ID and call `init({ manifestUrl: "/track_relay_catalog.json" })`. Previously this threw synchronously; now it succeeds and leaves the GA4 dispatch surface dormant (`_flushConfigOnce()` already short-circuits on missing `_measurementId`, so `track()` and `Ga4Gtag.handle()` continue to validate but do not emit `gtag('config', ...)`). Hosts that relied on the missing-`measurementId` throw to detect misconfiguration must migrate — assert their own `measurementId` (or any other host-app-side invariant) before calling `init`. The error message thrown when `manifestUrl` is missing is also reworded to mention `manifestUrl` only.
+- `client/src/index.d.ts`: `InitOptions.measurementId` typed as `measurementId?: string` (was required `string`). Existing TypeScript hosts that pass `measurementId` continue to typecheck unchanged; AhoyJs-only hosts can now omit it without a type error.
+
+### Notes
+
+- REQ-09 success criteria mention `Ahoy::Visit#track` as a fallback dispatch path. This method does not exist on `Ahoy::Visit` (the ActiveRecord model). The `Ahoy::Tracker` is the sole public tracking surface, and it is bound to the request lifecycle (it wraps the controller cookie jar / visit auto-create). The Ahoy subscriber therefore routes through `controller.ahoy.track` only; the no-controller skip path (with a `Rails.logger.warn` line) is the substitute for the missing `visit.track` route. See `phases/03-ahoy-subscribers/03-RESEARCH.md` §"The visit.track question" for full rationale.
+- Cross-subscriber name parity: server `TrackRelay::Subscribers::Ahoy.name` returns `"TrackRelay::Subscribers::Ahoy"` (Ruby `Class#name`); client `AhoyJs.name` returns `"AhoyJs"`. The names differ but the dispatched event-name strings are byte-identical on both sides — server `payload.name.to_s` → `tracker.track`, client `eventName` → `window.ahoy.track`. REQ-09's "same event names as the server" criterion is about the event-name string, not the subscriber class name.
+
 ## [0.2.0] - 2026-05-06
 
 ### Added
@@ -63,5 +81,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Privacy: untyped JSONL captures param NAMES only (never VALUES) to avoid leaking PII.
 - Naming: `track_relay` availability on RubyGems will be re-validated before 1.0.
 
+[0.3.0]: https://github.com/dchuk/track_relay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/dchuk/track_relay/releases/tag/v0.2.0
 [0.1.0]: https://github.com/dchuk/track_relay/releases/tag/v0.1.0

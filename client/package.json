@@ -1,6 +1,6 @@
 {
   "name": "@track_relay/client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Client-side event tracker for the track_relay Rails gem. Validates events against the JSON manifest and dispatches via window.gtag (GA4).",
   "type": "module",
   "main": "./dist/index.cjs",
