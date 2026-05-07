@@ -1,0 +1,31 @@
+# frozen_string_literal: true
+
+# ApplicationSubscriber — base class for your custom track_relay subscribers.
+#
+# Subclass this to add your own destinations:
+#
+#   class MyAnalyticsSubscriber < ApplicationSubscriber
+#     def deliver(payload)
+#       # send payload.name + payload.params somewhere
+#     end
+#   end
+#
+# Register in config/initializers/track_relay.rb:
+#
+#   TrackRelay.configure do |config|
+#     config.subscribe MyAnalyticsSubscriber.new
+#   end
+#
+# Run `rails g track_relay:subscriber NAME` to scaffold a subscriber.
+class ApplicationSubscriber < TrackRelay::Subscribers::Base
+  # Uncomment to run inline instead of via DeliveryJob:
+  # synchronous!
+
+  # payload.name      => :event_name (Symbol)
+  # payload.params    => { key: value, ... } (typed and coerced)
+  # payload.context   => { controller:, action:, client_id:, user:, ... }
+  # payload.timestamp => Time
+  def deliver(payload)
+    raise NotImplementedError, "#{self.class.name} must implement #deliver(payload)"
+  end
+end
