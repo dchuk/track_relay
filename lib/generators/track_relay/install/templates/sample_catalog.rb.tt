@@ -1,0 +1,17 @@
+# frozen_string_literal: true
+
+# Sample catalog — define your events here.
+#
+# The Railtie autoloads every *.rb file under config/track_relay/ at boot
+# and reloads them on every code reload in development.
+#
+# Run `rails g track_relay:event NAME` to scaffold a new event in its own file.
+
+TrackRelay.catalog do
+  # Tutorial event: prove your install works.
+  #   In a controller action: `track :hello_world, message: "hi"`
+  #   In a test: `assert_tracked :hello_world, message: "hi"`
+  event :hello_world do
+    string :message, required: true
+  end
+end
