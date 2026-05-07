@@ -29,6 +29,13 @@ end
 
 require "minitest/autorun"
 require "active_support/current_attributes/test_helper"
+require "webmock/minitest"
+
+# Block all real HTTP from the gem's test suite. Localhost is allowed so
+# Combustion's dummy app can serve internal requests if any test ever
+# uses it. Subscribers that hit real HTTP endpoints (GA4 in Phase 02)
+# must use `stub_request` to register expected calls.
+WebMock.disable_net_connect!(allow_localhost: true)
 
 class ActiveSupport::TestCase
   include ActiveSupport::CurrentAttributes::TestHelper
