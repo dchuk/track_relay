@@ -4,7 +4,7 @@ Unified, typed event tracking for Rails apps. One catalog, multiple destinations
 
 ## Status
 
-0.2.0 — adds the GA4 Measurement Protocol server-side subscriber, JSON manifest generation, configurable `client_id` resolver chain, subscriber-side `only:` / `except:` filters, and the `@track_relay/client` JS package for client-side gtag dispatch. Ahoy lands in 0.3.0.
+**Version:** 1.0.0 (pending release) — public API is being stabilized for the 1.0.0 cut. See [CHANGELOG.md](CHANGELOG.md) for release history and [UPGRADING.md](UPGRADING.md) for migration notes.
 
 ## Why
 
@@ -15,10 +15,19 @@ Modern Rails apps that want both marketing analytics (GA4) and product analytics
 Add to your Gemfile:
 
 ```ruby
-gem "track_relay", "~> 0.2.0"
+gem "track_relay", "~> 1.0"
 ```
 
 Then `bundle install`.
+
+Then run the install generator to scaffold a working configuration:
+
+```bash
+bin/rails generate track_relay:install
+bundle exec rake test  # passes cleanly out of the box
+```
+
+See [USAGE.md](USAGE.md) for a full walkthrough.
 
 Requires Ruby 3.2+ and Rails 7.1, 7.2, or 8.0.
 
@@ -31,6 +40,8 @@ npm install @track_relay/client
 See [GA4 + client-side tracking](#ga4--client-side-tracking) below.
 
 ## Quick start
+
+> **Tip:** `bin/rails g track_relay:install` scaffolds the five files below for you. Read on if you'd rather wire them up by hand.
 
 ```ruby
 # config/initializers/track_relay.rb
@@ -128,6 +139,25 @@ Built-in subscribers:
 - `Subscribers::Test` — in-memory capture for specs. Per-instance state, no class-level globals.
 - `Subscribers::Logger` — writes a one-line summary to `Rails.logger`; appends untyped events to `config.untyped_log_path` JSONL with the canonical shape `{event, params, controller, action, timestamp}` (param NAMES only — values are never written, by design, to avoid leaking PII).
 
+### Ahoy subscriber (server-side)
+
+`TrackRelay::Subscribers::Ahoy` routes events through the host app's
+ahoy_matey instrumentation using only the public Ahoy API
+(`controller.ahoy.track` or `current_visit.track`). It never calls
+`Ahoy::Event.create!` directly.
+
+Requires the `ahoy_matey` gem in your Gemfile. Wire it in the
+initializer:
+
+```ruby
+TrackRelay.configure do |config|
+  config.subscribe TrackRelay::Subscribers::Ahoy.new
+end
+```
+
+Job-context calls (no controller, no visit) are logged and skipped;
+the Ahoy subscriber will never fabricate a write without a real visit.
+
 ### Subscribing directly to AS::Notifications
 
 Because every event is published through `ActiveSupport::Notifications.instrument("track_relay.event", event: payload)`, host apps can subscribe directly without writing a `Subscribers::Base` subclass at all:
@@ -139,6 +169,30 @@ end
 ```
 
 This is useful for one-off integrations and for debugging — your existing `ActiveSupport::Notifications` tooling (lograge, the Rails event reporter, etc.) just works.
+
+## Generators
+
+`track_relay` ships three Rails generators.
+
+- `bin/rails g track_relay:install` — opinionated scaffold: richly
+  commented initializer (`config/initializers/track_relay.rb`),
+  sample catalog (`config/track_relay/sample.rb`),
+  ApplicationSubscriber base class
+  (`app/track_relay/subscribers/application_subscriber.rb`), and
+  `include TrackRelay::ControllerTracking` injected into
+  ApplicationController (idempotent — no-ops if the include already
+  exists).
+
+- `bin/rails g track_relay:event NAME` — scaffolds a typed catalog
+  entry stub at `config/track_relay/<name>.rb` with a
+  `TrackRelay.catalog do event :name do ... end end` block. Each
+  event lives in its own file; the Railtie merges them at boot.
+
+- `bin/rails g track_relay:subscriber NAME` — scaffolds a subscriber
+  class stub at
+  `app/track_relay/subscribers/<name>_subscriber.rb`.
+
+See [USAGE.md](USAGE.md) for a full walkthrough.
 
 ### Controller and Job helpers
 
@@ -340,9 +394,47 @@ CI runs the full Ruby × Rails matrix (9 combinations) on every push via Apprais
 
 ## Roadmap
 
-- 0.2.0 — GA4 Measurement Protocol subscriber + JSON manifest + `@track_relay/client` JS package (shipped)
-- 0.3.0 — Ahoy subscriber (server + client)
-- 0.4.0 — install / event / subscriber generators, more built-in subscribers (PostHog, Plausible, webhooks)
+### Shipped
+- 0.1.0 — Core (catalog DSL, dispatch, Test + Logger subscribers, Minitest/RSpec helpers)
+- 0.2.0 — GA4 (server-side Measurement Protocol subscriber, client-side `Ga4Gtag`, JSON manifest)
+- 0.3.0 — Ahoy (server-side `Subscribers::Ahoy`, client-side `AhoyJs`)
+
+### Pending release
+- 1.0.0 (pending release) — Polish: generators, doc audit, public-API stability guarantee
+
+### Future (post-1.0.0)
+- Additional v2 subscribers: PostHog, Mixpanel, Plausible, Webhook, Segment
+- Optional engine mount for `/track_relay/events` POST endpoint (ad-blocker resilience)
+- Performance benchmarks
+- Companion `rubocop-track_relay` cop for raw `gtag` / `ahoy.track` call detection
+
+## Public API stability
+
+As of 1.0.0, the following surface is covered by SemVer guarantees:
+
+- Module entry points: `TrackRelay.track`, `.configure`, `.catalog`,
+  `.subscribe`, `.identify`, `.test_mode!`, `.test_mode_off!`
+- Subscriber base class and class macros: `TrackRelay::Subscribers::Base`,
+  `synchronous!`, `filter only:`, `filter except:`
+- Built-in subscribers: `TrackRelay::Subscribers::Test`, `Logger`,
+  `Ga4MeasurementProtocol`, `Ahoy`
+- Concerns: `TrackRelay::ControllerTracking`, `TrackRelay::JobTracking`
+- Test helpers: `TrackRelay::Testing::Helpers`, `assert_tracked`,
+  `refute_tracked`
+- Catalog DSL keywords (`event`, `integer`, `string`, `float`,
+  `boolean`, `datetime`, `user_property`) and validators
+  (`required:`, `max:`, `in:`, `format:`, `sanitize:`)
+- Generators: `track_relay:install`, `track_relay:event`,
+  `track_relay:subscriber`
+- Rake tasks: `track_relay:lint`, `track_relay:lint:json`,
+  `track_relay:lint:ga4`, `track_relay:manifest`
+
+Internal classes (`TrackRelay::EventPayload`, `Instrumenter`,
+`Dispatcher`, `Catalog`, `Current`, `DeliveryJob`, `ClientId::*`)
+are not part of the public API contract and may change without a
+major version bump.
+
+See [UPGRADING.md](UPGRADING.md) for migration notes from 0.x.
 
 ## Contributing
 
