@@ -11,10 +11,13 @@
 //     `track()` for hosts that prefer object dispatch.
 //
 // State is module-private; `init` is the single source of truth for
-// `_measurementId` and `_manifest`. Both fields on `init({...})` are
-// REQUIRED — the Rails layer is the source of truth (TrackRelay.config
-// .ga4_measurement_id + asset_path('track_relay_catalog.json')) and the
-// JS package cannot read Ruby config. Misconfiguration MUST be loud.
+// `_measurementId` and `_manifest`. `manifestUrl` is REQUIRED — the
+// Rails layer is the source of truth (asset_path('track_relay_catalog.json'))
+// and the JS package cannot read Ruby config. Misconfiguration MUST be
+// loud. `measurementId` is OPTIONAL as of 0.3.0 — AhoyJs-only hosts
+// (no GA4 in use) can omit it. When supplied it is stored and used by
+// the GA4 dispatch path; when nullish/empty `_flushConfigOnce()` short
+// -circuits and the GA4 surface stays dormant.
 
 import { validateParams } from "./validator.js";
 
@@ -28,10 +31,15 @@ let _configFlushed = false;
 const PREFIX = "@track_relay/client";
 
 /**
- * Initialize the client by fetching the manifest. Both `measurementId`
- * and `manifestUrl` are required — passing nullish or empty-string for
- * either throws SYNCHRONOUSLY (not via a rejected promise) BEFORE any
- * fetch is attempted, so misconfiguration is loud at the call site.
+ * Initialize the client by fetching the manifest. `manifestUrl` is
+ * required — passing nullish or empty-string throws SYNCHRONOUSLY (not
+ * via a rejected promise) BEFORE any fetch is attempted, so
+ * misconfiguration is loud at the call site.
+ *
+ * `measurementId` is OPTIONAL as of 0.3.0. AhoyJs-only hosts (no GA4
+ * subscriber in use) can omit it. When supplied, the GA4 dispatch path
+ * picks it up via `_flushConfigOnce()`; when omitted, the GA4 surface
+ * stays dormant and only AhoyJs / non-GA4 paths fire.
  *
  * Returns a Promise that resolves once the manifest has been fetched
  * and parsed. Callers can `await init({...})` and `.catch()` network
@@ -44,9 +52,9 @@ const PREFIX = "@track_relay/client";
  * async helper.
  */
 export function init({ measurementId, manifestUrl, env = "production", onValidationError } = {}) {
-  if (!measurementId || !manifestUrl) {
+  if (!manifestUrl) {
     throw new Error(
-      `${PREFIX}: init requires both measurementId (e.g. 'G-XXXXXXXXXX') and manifestUrl`
+      `${PREFIX}: init requires manifestUrl (e.g. served by \`rake track_relay:manifest\`)`
     );
   }
 

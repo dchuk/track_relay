@@ -10,9 +10,13 @@ export interface InitOptions {
   /**
    * GA4 Measurement ID, e.g. `"G-XXXXXXXXXX"`. Sourced from
    * `TrackRelay.config.ga4_measurement_id` in the Rails layout.
-   * REQUIRED — passing nullish or empty-string throws synchronously.
+   * Optional. Only required when a GA4 subscriber is in use; AhoyJs-only
+   * hosts can omit it. When omitted (or empty-string / null) the GA4
+   * dispatch surface stays dormant — `track()` and `Ga4Gtag.handle()`
+   * still validate against the manifest but `gtag('config', ...)` is
+   * never emitted.
    */
-  measurementId: string;
+  measurementId?: string;
 
   /**
    * URL of the typed JSON manifest written by `rake track_relay:manifest`.
@@ -39,10 +43,11 @@ export interface InitOptions {
 export type TrackParams = Record<string, string | number | boolean | Date | null | undefined>;
 
 /**
- * Initialize the client. Validates `measurementId`/`manifestUrl`
- * synchronously, then fetches and parses the manifest. The returned
- * Promise resolves once state is populated; subsequent `track()` calls
- * validate against the loaded manifest.
+ * Initialize the client. Validates `manifestUrl` synchronously, then
+ * fetches and parses the manifest. `measurementId` is optional —
+ * AhoyJs-only hosts can omit it. The returned Promise resolves once
+ * state is populated; subsequent `track()` / `Ga4Gtag.handle()` /
+ * `AhoyJs.handle()` calls validate against the loaded manifest.
  */
 export function init(options: InitOptions): Promise<void>;
 
