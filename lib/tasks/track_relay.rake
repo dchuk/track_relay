@@ -9,6 +9,12 @@
 # is a footgun (the user thinks the audit "passed" when in fact nothing
 # was ever recorded). When the path IS set, the task exits 0 — lint is
 # a report, not a gate.
+
+# Loaded via require_relative (not the gem's umbrella `require
+# "track_relay"`) so this rake file stays file-disjoint with Plan 02-02
+# — `lib/track_relay.rb` is owned by that plan in the same wave.
+require_relative "../track_relay/manifest"
+
 namespace :track_relay do
   desc "Audit untyped events captured in the JSONL sink (config.untyped_log_path)"
   task lint: :environment do
@@ -34,5 +40,19 @@ namespace :track_relay do
     abort "track_relay: untyped_log_path is not configured" if path.nil?
 
     puts TrackRelay::Linter.new(path).to_json
+  end
+
+  desc "Generate public/track_relay_catalog.json from the loaded catalog"
+  task manifest: :environment do
+    # Footgun guard (RISK-04): an empty manifest tells the JS client
+    # "no schema, accept everything" — silently. Abort loudly so the
+    # operator notices the catalog never loaded.
+    if TrackRelay::Catalog.all.empty?
+      abort "[track_relay] aborting: catalog is empty (no events registered — check config/track_relay/**/*.rb)"
+    end
+
+    path = TrackRelay::Manifest.write!
+    count = TrackRelay::Catalog.all.size
+    puts "[track_relay] manifest written to #{path} (#{count} #{(count == 1) ? "event" : "events"})"
   end
 end
