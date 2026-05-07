@@ -23,8 +23,47 @@ module TrackRelay
   # ActiveJob's Executor clears CurrentAttributes before `perform`, so
   # any context the subscriber needs must already be on
   # `payload.context` (snapshotted at track time by the Instrumenter).
+  #
+  # ## GA4 retry / discard policy (Plan 02-04)
+  #
+  # `retry_on TrackRelay::DeliveryRetriableError` covers transient GA4
+  # failures (HTTP 5xx, network timeouts, ECONNREFUSED, SocketError).
+  # The wait algorithm `:polynomially_longer` produces ~3s, ~18s, ~83s,
+  # ~258s with 15% default jitter — appropriate for GA4 since the
+  # Measurement Protocol has no strict ordering requirement, sends are
+  # idempotent enough for analytics, and GA4's 72-hour event-backdating
+  # window means late retries still arrive correctly.
+  #
+  # `discard_on TrackRelay::DeliveryDiscardableError` covers HTTP 4xx
+  # (defensive — Scout §2 confirms GA4 returns 2xx in practice even on
+  # malformed payloads, but mapping 4xx to discard is correct in case
+  # Google ever changes that contract).
+  #
+  # ### Why `DEFAULT_GA4_DELIVERY_ATTEMPTS` is a class-local constant
+  #
+  # `retry_on` runs at class-body load time, **before** any
+  # `TrackRelay.configure` block in a host's initializer has had a
+  # chance to mutate {TrackRelay.config}. Reading `TrackRelay.config.
+  # ga4_delivery_attempts` here would either crash (singleton not yet
+  # built) or capture a stale default that the host's initializer is
+  # about to overwrite. Pinning the value to a class-local constant
+  # sidesteps the load-order hazard entirely. A future minor (Phase 4)
+  # can introduce runtime configurability via `self.inherited` /
+  # `after_initialize` machinery without breaking this contract.
   class DeliveryJob < ActiveJob::Base
     queue_as :track_relay
+
+    # GA4 retry attempt cap (Plan 02-04). Class-local constant — see
+    # the rationale in the class docstring above. Future Phase 4 work
+    # may introduce `config.ga4_delivery_attempts` once a safe
+    # late-binding path exists; until then, `5` is the contract.
+    DEFAULT_GA4_DELIVERY_ATTEMPTS = 5
+
+    retry_on TrackRelay::DeliveryRetriableError,
+      wait: :polynomially_longer,
+      attempts: DEFAULT_GA4_DELIVERY_ATTEMPTS
+
+    discard_on TrackRelay::DeliveryDiscardableError
 
     # @param subscriber_class_name [String] fully-qualified subscriber
     #   class name (e.g. `"TrackRelay::Subscribers::Logger"`)

@@ -121,15 +121,37 @@ module TrackRelay
       #
       # Returns `nil` on success or the StandardError on failure. ALWAYS
       # logs the failure (via `Rails.logger.error`) when running under
-      # Rails. NEVER re-raises — the Dispatcher (or {DeliveryJob}) makes
-      # the loudness decision based on
-      # {Configuration#swallow_subscriber_errors}.
+      # Rails. NEVER re-raises arbitrary `StandardError`s — the
+      # Dispatcher (or {DeliveryJob}) makes the loudness decision based
+      # on {Configuration#swallow_subscriber_errors}.
+      #
+      # **REQ-23 carve-out (Plan 02-04):**
+      # {TrackRelay::DeliveryRetriableError} and
+      # {TrackRelay::DeliveryDiscardableError} are RE-RAISED unconditionally
+      # — even when `swallow_subscriber_errors = true` (the production
+      # default). ActiveJob's `retry_on` / `discard_on` macros only fire
+      # on raised exceptions; without this carve-out the GA4 retry/discard
+      # policy in {DeliveryJob} would be silently broken in production
+      # because `safe_deliver` would catch the exception, return it as a
+      # value, and the job would think delivery succeeded.
+      #
+      # The carve-out is INTENTIONALLY NARROW: arbitrary `StandardError`s
+      # still flow through the existing log-and-return path — REQ-23's
+      # blanket-rescue contract is preserved for everything outside of
+      # the typed retry/discard exception classes.
       #
       # @param payload [EventPayload]
       # @return [nil, StandardError]
       def safe_deliver(payload)
         deliver(payload)
         nil
+      rescue TrackRelay::DeliveryRetriableError, TrackRelay::DeliveryDiscardableError
+        # Carve-out: ActiveJob retry_on/discard_on must see these.
+        # Do NOT log here — the DeliveryJob's retry path will log on
+        # eventual exhaustion, and the discard path is an intentional
+        # drop. Logging on every retry attempt would spam the log with
+        # transient blips that resolve on retry.
+        raise
       rescue => e
         log_failure(e)
         e
