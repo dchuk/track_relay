@@ -162,4 +162,86 @@ class LinterRakeTaskTest < ActiveSupport::TestCase
     assert Rake::Task.task_defined?("track_relay:lint")
     assert Rake::Task.task_defined?("track_relay:lint:json")
   end
+
+  test "Railtie's rake_tasks block exposes track_relay:lint:ga4 to consumer apps" do
+    expected_path = File.expand_path("../../lib/tasks/track_relay.rake", __dir__)
+    load expected_path unless Rake::Task.task_defined?("track_relay:lint:ga4")
+    assert Rake::Task.task_defined?("track_relay:lint:ga4")
+  end
+
+  # ---- track_relay:lint:ga4 abort-on-missing-config ----------------
+
+  test "rake track_relay:lint:ga4 aborts NONZERO when untyped_log_path is unset" do
+    TrackRelay.config.untyped_log_path = nil
+
+    err = assert_raises(SystemExit) do
+      capture_io { Rake::Task["track_relay:lint:ga4"].invoke }
+    end
+
+    refute_equal 0, err.status
+  end
+
+  # ---- track_relay:lint:ga4 happy paths ----------------------------
+
+  test "rake track_relay:lint:ga4 exits 0 when JSONL has no GA4 violations" do
+    Tempfile.create(["untyped", ".jsonl"]) do |f|
+      f.puts({
+        event: "ad_hoc",
+        params: %w[foo],
+        controller: "ArticlesController",
+        action: "show",
+        timestamp: "2026-05-06T12:00:00Z"
+      }.to_json)
+      f.flush
+      TrackRelay.config.untyped_log_path = f.path
+
+      err = assert_raises(SystemExit) do
+        capture_io { Rake::Task["track_relay:lint:ga4"].invoke }
+      end
+      assert_equal 0, err.status
+    end
+  end
+
+  test "rake track_relay:lint:ga4 exits NONZERO when JSONL has GA4 violations" do
+    Tempfile.create(["untyped", ".jsonl"]) do |f|
+      # `page_view` is reserved by GA4
+      f.puts({
+        event: "page_view",
+        params: %w[foo],
+        controller: "ArticlesController",
+        action: "show",
+        timestamp: "2026-05-06T12:00:00Z"
+      }.to_json)
+      f.flush
+      TrackRelay.config.untyped_log_path = f.path
+
+      err = assert_raises(SystemExit) do
+        capture_io { Rake::Task["track_relay:lint:ga4"].invoke }
+      end
+      refute_equal 0, err.status
+    end
+  end
+
+  test "rake track_relay:lint:ga4 prints violation report" do
+    Tempfile.create(["untyped", ".jsonl"]) do |f|
+      f.puts({event: "page_view", params: %w[a],
+              controller: "X", action: "y",
+              timestamp: "2026-05-06T12:00:00Z"}.to_json)
+      f.flush
+      TrackRelay.config.untyped_log_path = f.path
+
+      # Capture stdout manually so the SystemExit raised by the task
+      # body does NOT short-circuit capture_io's normal-return contract.
+      real_stdout = $stdout
+      captured = StringIO.new
+      $stdout = captured
+      begin
+        assert_raises(SystemExit) { Rake::Task["track_relay:lint:ga4"].invoke }
+      ensure
+        $stdout = real_stdout
+      end
+      assert_match(/event :page_view/, captured.string)
+      assert_match(/reason:/, captured.string)
+    end
+  end
 end

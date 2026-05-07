@@ -220,4 +220,93 @@ class LinterTest < Minitest::Test
       assert_equal 2, reports.first.total
     end
   end
+
+  # ---- GA4 event-name lint (Plan 02-04) -----------------------------
+
+  def test_ga4_violations_empty_for_clean_jsonl
+    fixture = [line(event: "purchase", params: %w[value]),
+      line(event: "sign_up", params: %w[method])]
+    with_jsonl(fixture) do |path|
+      linter = TrackRelay::Linter.new(path)
+      assert_equal [], linter.ga4_violations
+    end
+  end
+
+  def test_ga4_violations_flags_reserved_event_name
+    # `page_view` is in TrackRelay::GA4_RESERVED_NAMES - boot-time
+    # catalog validation would block it, but an UNTYPED event with
+    # that name slips into the JSONL sink. The linter is the audit
+    # trail.
+    fixture = [line(event: "page_view", params: %w[a]),
+      line(event: "page_view", params: %w[a])]
+    with_jsonl(fixture) do |path|
+      violations = TrackRelay::Linter.new(path).ga4_violations
+      assert_equal 1, violations.size
+      assert_equal "page_view", violations.first.event_name
+      assert_equal 2, violations.first.count
+      assert_match(/reserved/i, violations.first.reason)
+    end
+  end
+
+  def test_ga4_violations_flags_invalid_shape
+    fixture = [line(event: "BadName", params: %w[a])]
+    with_jsonl(fixture) do |path|
+      violations = TrackRelay::Linter.new(path).ga4_violations
+      assert_equal 1, violations.size
+      assert_equal "BadName", violations.first.event_name
+      assert_match(/snake_case/i, violations.first.reason)
+    end
+  end
+
+  def test_ga4_violations_sorted_by_count_desc
+    fixture = [
+      line(event: "BadOne", params: %w[a]),
+      line(event: "BadTwo", params: %w[b]),
+      line(event: "BadTwo", params: %w[b]),
+      line(event: "BadTwo", params: %w[b])
+    ]
+    with_jsonl(fixture) do |path|
+      violations = TrackRelay::Linter.new(path).ga4_violations
+      assert_equal 2, violations.size
+      assert_equal "BadTwo", violations.first.event_name
+      assert_equal 3, violations.first.count
+      assert_equal "BadOne", violations.last.event_name
+      assert_equal 1, violations.last.count
+    end
+  end
+
+  def test_print_ga4_returns_true_when_clean
+    fixture = [line(event: "purchase", params: %w[value])]
+    with_jsonl(fixture) do |path|
+      io = StringIO.new
+      result = TrackRelay::Linter.new(path).print_ga4(io)
+
+      assert_equal true, result
+      assert_match(/clean/, io.string)
+      assert_match(/violations: 0/, io.string)
+    end
+  end
+
+  def test_print_ga4_returns_false_and_lists_violations
+    fixture = [line(event: "BadName", params: %w[a])]
+    with_jsonl(fixture) do |path|
+      io = StringIO.new
+      result = TrackRelay::Linter.new(path).print_ga4(io)
+
+      assert_equal false, result
+      assert_match(/event :BadName/, io.string)
+      assert_match(/reason:/, io.string)
+    end
+  end
+
+  def test_ga4_violations_skips_blank_event_names
+    fixture = [line(event: "", params: %w[a]),
+      line(event: "page_view", params: %w[a])]
+    with_jsonl(fixture) do |path|
+      violations = TrackRelay::Linter.new(path).ga4_violations
+      # Empty event name ignored; only page_view flagged.
+      assert_equal 1, violations.size
+      assert_equal "page_view", violations.first.event_name
+    end
+  end
 end

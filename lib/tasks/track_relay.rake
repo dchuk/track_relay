@@ -42,6 +42,28 @@ namespace :track_relay do
     puts TrackRelay::Linter.new(path).to_json
   end
 
+  desc "Audit untyped events for GA4 event-name constraint violations"
+  task "lint:ga4" => :environment do
+    path = TrackRelay.config.untyped_log_path
+    if path.nil?
+      abort <<~MSG
+        track_relay: untyped_log_path is not configured.
+        Set it in config/initializers/track_relay.rb:
+
+          TrackRelay.configure do |c|
+            c.untyped_log_path = Rails.root.join("tmp/track_relay_untyped.jsonl")
+            c.subscribe TrackRelay::Subscribers::Logger.new
+          end
+      MSG
+    end
+
+    clean = TrackRelay::Linter.new(path).print_ga4
+    # Exit non-zero when violations exist, zero when clean. Lets CI
+    # pipelines gate on `rake track_relay:lint:ga4` without parsing
+    # output.
+    exit(clean ? 0 : 1)
+  end
+
   desc "Generate public/track_relay_catalog.json from the loaded catalog"
   task manifest: :environment do
     # Footgun guard (RISK-04): an empty manifest tells the JS client

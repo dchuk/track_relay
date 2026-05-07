@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "track_relay/validators/ga4_constraints"
 
 module TrackRelay
   # Audits the JSONL untyped-event sink written by
@@ -121,6 +122,82 @@ module TrackRelay
           signatures: r.signatures.map { |s| {params: s.params, count: s.count} }
         }
       })
+    end
+
+    # One row in the GA4 lint report.
+    #
+    # @!attribute [rw] event_name
+    #   The event name as it appeared in the JSONL `event` field.
+    # @!attribute [rw] reason
+    #   Human-readable description of the GA4 rule that was violated.
+    # @!attribute [rw] count
+    #   How many JSONL lines contained this event name (regardless of
+    #   param signature — the GA4 lint groups purely by event name).
+    Ga4Violation = Struct.new(:event_name, :reason, :count, keyword_init: true)
+
+    # Audit each unique event name in the JSONL sink against
+    # {Validators::Ga4Constraints} (REQ-28, Plan 02-04 / Scout §8).
+    #
+    # Only the event-name shape is checked here:
+    #
+    #   - snake_case regex (`/\A[a-z][a-z0-9_]*\z/`)
+    #   - max 40 chars
+    #   - not in `GA4_RESERVED_NAMES`
+    #
+    # Param-name validation is intentionally OUT OF SCOPE for this
+    # method — `params` in the JSONL is a sorted-NAMES-only privacy
+    # snapshot, but param-name shape is a per-line fact (each occurrence
+    # could fail differently) and the linter's grouping model is built
+    # around event names. Use the call-time validation in
+    # {Subscribers::Ga4MeasurementProtocol#deliver} for per-payload
+    # checks; this method is the audit trail for "what event names did
+    # we ship that GA4 will silently drop?".
+    #
+    # @return [Array<Ga4Violation>] sorted by `count` descending. Empty
+    #   when every event name in the JSONL passes.
+    def ga4_violations
+      counts = Hash.new(0)
+      read_lines do |entry|
+        name = entry["event"]
+        next if name.nil? || name.empty?
+        counts[name] += 1
+      end
+
+      counts.map { |name, count|
+        begin
+          Validators::Ga4Constraints.validate_event_name!(name)
+          nil
+        rescue Ga4ConstraintError => e
+          Ga4Violation.new(event_name: name, reason: e.message, count: count)
+        end
+      }.compact.sort_by { |v| -v.count }
+    end
+
+    # Write the GA4 violation report to `io`.
+    #
+    # Returns `true` when there were no violations (rake task should
+    # exit 0), `false` otherwise (rake task exits non-zero).
+    #
+    # @param io [IO] writer; defaults to `$stdout`
+    # @return [Boolean] `true` ⇒ clean, `false` ⇒ violations found
+    def print_ga4(io = $stdout)
+      violations = ga4_violations
+      io.puts "# track_relay GA4 event-name audit"
+      io.puts "# source: #{@jsonl_path}"
+      io.puts "# violations: #{violations.size}"
+      io.puts ""
+
+      if violations.empty?
+        io.puts "# clean — every event name passes GA4 constraints"
+        return true
+      end
+
+      violations.each do |v|
+        io.puts "event :#{v.event_name}  (#{v.count} occurrence#{"s" unless v.count == 1})"
+        io.puts "  reason: #{v.reason}"
+        io.puts ""
+      end
+      false
     end
 
     private
