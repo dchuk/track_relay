@@ -22,17 +22,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Railtie merges them at boot.
 - `rails g track_relay:subscriber NAME` — scaffolds a subscriber class
   stub at `app/track_relay/subscribers/<name>_subscriber.rb`.
-- Getting-started guide at [USAGE.md](USAGE.md).
-- Migration notes at [UPGRADING.md](UPGRADING.md).
+- Getting-started guide at [USAGE.md](USAGE.md) (now shipped inside the gem).
+- Migration notes at [UPGRADING.md](UPGRADING.md) (now shipped inside the gem).
 - E2E happy-path test exercising the install generator's output through
   the live Combustion harness (controller call → Test subscriber capture).
 - README sections: Generators, Ahoy subscriber, Public API stability.
 
 ### Changed
-- Targeting 1.0.0 (pending release); public-API stability is
-  established for this release. See
+- Public-API stability is established for this release. See
   [UPGRADING.md](UPGRADING.md) for migration paths from 0.1.0 / 0.2.0
   / 0.3.0 to 1.0.0.
+
+### Fixed
+- `TrackRelay::ClientId::AhoyVisitor` now reads
+  `controller.ahoy.visitor_token` directly. The previous chain
+  (`controller.ahoy.current_visit.visitor_token`) raised
+  `NoMethodError` on `ahoy_matey >= 5.0` because `Ahoy::Tracker` does
+  not define `current_visit`. The error was rescued by the resolver
+  chain so the gem did not crash, but the resolver always fell through
+  to a random GA4 `client_id` instead of a stable Ahoy visitor token.
+
+### Documentation
+- README and USAGE: note that `ahoy_matey` silently drops events from
+  non-browser user-agents (`[ahoy] Event excluded`) — visible when
+  smoke-testing via `curl`/Postman.
 
 ### Notes
 - **Public API stability:** Public-API stability for `TrackRelay.track`, `.configure`,

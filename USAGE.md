@@ -118,6 +118,13 @@ Built-in subscribers:
 - `TrackRelay::Subscribers::Ahoy` — ahoy_matey integration (requires
   the `ahoy_matey` gem in your Gemfile)
 
+> **Heads up — Ahoy bot exclusion.** ahoy_matey silently drops events
+> from requests that look bot-like (logged as `[ahoy] Event excluded`).
+> If you're testing via `curl`, Postman, or anything with a non-browser
+> User-Agent, no row will land in `ahoy_events`. Use a real browser or
+> pass a Chrome/Firefox UA header. This is Ahoy's behavior, not
+> track_relay's.
+
 ## 5. Test your events
 
 `track_relay` ships Minitest and RSpec test helpers. In Minitest:

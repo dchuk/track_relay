@@ -6,23 +6,21 @@ require "test_helper"
 #
 # Contract:
 #
-# - `#call(controller:, **)` returns
-#   `controller.ahoy.current_visit.visitor_token` when the controller
-#   exposes the Ahoy gem's `ahoy` helper.
+# - `#call(controller:, **)` returns `controller.ahoy.visitor_token`
+#   when the controller exposes the Ahoy gem's `ahoy` helper.
 # - Returns `nil` when the controller does NOT respond to `:ahoy`. Must
 #   NOT raise NameError, must NOT require ahoy. Duck-typed via
 #   `respond_to?(:ahoy, true)`.
-# - Returns `nil` when `ahoy.current_visit` is `nil`.
+# - Returns `nil` when `ahoy.visitor_token` is `nil`.
 # - Returns `nil` when controller is nil.
 class TrackRelay::ClientId::AhoyVisitorTest < ActiveSupport::TestCase
-  AhoyDouble = Struct.new(:current_visit)
-  VisitDouble = Struct.new(:visitor_token)
+  AhoyDouble = Struct.new(:visitor_token)
 
   # Controller WITH ahoy helper (e.g. an Ahoy::Trackable-included
   # ApplicationController in a host app).
   class ControllerWithAhoy
-    def initialize(visit)
-      @ahoy = AhoyDouble.new(visit)
+    def initialize(token)
+      @ahoy = AhoyDouble.new(token)
     end
 
     attr_reader :ahoy
@@ -35,14 +33,13 @@ class TrackRelay::ClientId::AhoyVisitorTest < ActiveSupport::TestCase
 
   setup { @resolver = TrackRelay::ClientId::AhoyVisitor.new }
 
-  test "returns visitor_token when ahoy.current_visit is present" do
-    visit = VisitDouble.new("tok-abc-123")
-    controller = ControllerWithAhoy.new(visit)
+  test "returns visitor_token when ahoy is present" do
+    controller = ControllerWithAhoy.new("tok-abc-123")
 
     assert_equal "tok-abc-123", @resolver.call(controller: controller)
   end
 
-  test "returns nil when ahoy.current_visit is nil" do
+  test "returns nil when ahoy.visitor_token is nil" do
     controller = ControllerWithAhoy.new(nil)
 
     assert_nil @resolver.call(controller: controller)
@@ -59,8 +56,7 @@ class TrackRelay::ClientId::AhoyVisitorTest < ActiveSupport::TestCase
   end
 
   test "ignores unknown keyword arguments (forward-compatible)" do
-    visit = VisitDouble.new("tok-xyz")
-    controller = ControllerWithAhoy.new(visit)
+    controller = ControllerWithAhoy.new("tok-xyz")
 
     assert_equal "tok-xyz", @resolver.call(controller: controller, request: :ignored)
   end

@@ -25,7 +25,7 @@ Gem::Specification.new do |spec|
 
   spec.homepage = spec.metadata["homepage_uri"]
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md CHANGELOG.md LICENSE.txt]
+  spec.files = Dir.glob("lib/**/*") + %w[README.md CHANGELOG.md USAGE.md UPGRADING.md LICENSE.txt]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "rails", ">= 7.1"

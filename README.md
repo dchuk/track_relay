@@ -143,8 +143,8 @@ Built-in subscribers:
 
 `TrackRelay::Subscribers::Ahoy` routes events through the host app's
 ahoy_matey instrumentation using only the public Ahoy API
-(`controller.ahoy.track` or `current_visit.track`). It never calls
-`Ahoy::Event.create!` directly.
+(`controller.ahoy.track`). It never calls `Ahoy::Event.create!`
+directly.
 
 Requires the `ahoy_matey` gem in your Gemfile. Wire it in the
 initializer:
@@ -157,6 +157,13 @@ end
 
 Job-context calls (no controller, no visit) are logged and skipped;
 the Ahoy subscriber will never fabricate a write without a real visit.
+
+> **Heads up — Ahoy bot exclusion.** ahoy_matey silently drops events
+> from requests whose user-agent doesn't look like a real browser
+> (logged as `[ahoy] Event excluded`). If you're smoke-testing via
+> `curl` or Postman and no row appears in `ahoy_events`, pass a real
+> browser User-Agent header. This is Ahoy's default behavior — see
+> ahoy_matey's `exclude_method` config to customize.
 
 ### Subscribing directly to AS::Notifications
 

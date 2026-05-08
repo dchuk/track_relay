@@ -16,18 +16,18 @@ module TrackRelay
     # without Ahoy. When Ahoy is absent, `#call` returns `nil` and the
     # next resolver in the chain takes over.
     #
-    # When Ahoy IS present, it exposes `controller.ahoy.current_visit`
-    # — an `Ahoy::Visit` ActiveRecord model with a `visitor_token`
-    # string column. We read that public API only; nothing internal.
+    # When Ahoy IS present, `controller.ahoy` returns an `Ahoy::Tracker`
+    # whose `#visitor_token` returns the visitor cookie value (no DB
+    # query). We use that public API only; nothing internal.
     class AhoyVisitor
       # @param controller [Object] any controller-like object that may
       #   or may not include `Ahoy::Trackable`.
-      # @return [String, nil] `ahoy.current_visit.visitor_token` if
-      #   available, else `nil`.
+      # @return [String, nil] `ahoy.visitor_token` if available, else
+      #   `nil`.
       def call(controller:, **)
         return nil unless controller&.respond_to?(:ahoy, true)
 
-        controller.ahoy&.current_visit&.visitor_token
+        controller.ahoy&.visitor_token
       end
     end
   end
