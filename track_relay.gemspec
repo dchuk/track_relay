@@ -5,7 +5,7 @@ require_relative "lib/track_relay/version"
 Gem::Specification.new do |spec|
   spec.name = "track_relay"
   spec.version = TrackRelay::VERSION
-  spec.authors = ["Darrin Demchuk"]
+  spec.authors = ["dchuk"]
   spec.email = ["darrindemchuk@gmail.com"]
 
   spec.summary = "One catalog, many destinations: typed analytics events for Rails."
