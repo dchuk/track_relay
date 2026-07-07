@@ -50,6 +50,30 @@ module TrackRelay
     #   When `true`, the GA4 subscriber posts to
     #   `https://region1.google-analytics.com/mp/collect` instead of
     #   the global endpoint. Defaults to `false`.
+    # @!attribute [rw] ga4_require_browser_client_id
+    #   When `true`, the GA4 subscriber delivers ONLY when the current
+    #   request carries a genuine `_ga` cookie (set by gtag JS, which
+    #   bots don't execute). No cookie — or a malformed one — means no
+    #   DeliveryJob is enqueued at all; the random client_id fallback
+    #   never fires. The cookie-derived client_id is merged into the
+    #   delivered payload's context. Defaults to `false` (deliver
+    #   everything, as before).
+    # @!attribute [rw] ga4_enrich_page_context
+    #   When `true`, the GA4 subscriber captures page context from the
+    #   current request at notification time and merges it into the
+    #   delivered event's params: `page_location` (request URL),
+    #   `page_referrer` (when a referer exists), and — when the gtag
+    #   session cookie `_ga_<stream>` is parseable — `session_id` plus
+    #   a nominal `engagement_time_msec`. Without these GA4 files
+    #   server-side events under a blank page path. Defaults to
+    #   `false`.
+    # @!attribute [rw] track_gate
+    #   Optional callable evaluated once per {TrackRelay.track} call,
+    #   BEFORE the event notification fans out to any subscriber.
+    #   Receives `payload:` (the built {EventPayload}) and `request:`
+    #   ({Current.request}, possibly `nil`) keywords; a falsy return
+    #   drops the event for every subscriber. `nil` (the default)
+    #   disables the gate entirely — current behavior.
     attr_accessor :swallow_subscriber_errors,
       :untyped_log_path,
       :untyped_events_allowed,
@@ -58,7 +82,10 @@ module TrackRelay
       :client_id_resolvers,
       :ga4_measurement_id,
       :ga4_api_secret,
-      :ga4_use_eu_endpoint
+      :ga4_use_eu_endpoint,
+      :ga4_require_browser_client_id,
+      :ga4_enrich_page_context,
+      :track_gate
 
     # @return [Array] registered subscriber instances, in insertion order
     attr_reader :subscribers
@@ -82,6 +109,9 @@ module TrackRelay
       @ga4_measurement_id = nil
       @ga4_api_secret = nil
       @ga4_use_eu_endpoint = false
+      @ga4_require_browser_client_id = false
+      @ga4_enrich_page_context = false
+      @track_gate = nil
     end
 
     # Append a subscriber to the registry.

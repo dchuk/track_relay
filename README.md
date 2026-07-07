@@ -334,6 +334,46 @@ TrackRelay.subscribe(
 )
 ```
 
+### Browser-proof gating + page context (opt-in)
+
+Server-side GA4 events have two chronic problems: bots with browser user agents inflate user counts (the Measurement Protocol accepts any client_id, and the subscriber's fallback mints a random one per event), and events land under a blank page path because nothing sends `page_location`. Two opt-in flags fix both:
+
+```ruby
+TrackRelay.configure do |c|
+  # Deliver ONLY when the current request carries a genuine `_ga`
+  # cookie — set by gtag JS, which bots don't execute. No cookie (or a
+  # malformed one) means no DeliveryJob is enqueued at all; the random
+  # client_id fallback never fires. The cookie-derived client_id is
+  # used for the delivery.
+  c.ga4_require_browser_client_id = true
+
+  # Capture page context from the request at notification time and
+  # send it with every GA4 event: `page_location` (request URL),
+  # `page_referrer` (when a referer exists), and `session_id` +
+  # `engagement_time_msec` when the gtag `_ga_<stream>` session cookie
+  # is present.
+  c.ga4_enrich_page_context = true
+end
+```
+
+Both run inside the subscriber's notification-time `prepare` hook — the request is still in scope there, and the captured values ride through the serialized payload to the async `DeliveryJob`. Other subscribers always receive the original, unmodified payload.
+
+### Host-level track gate (opt-in)
+
+`config.track_gate` is evaluated once per `TrackRelay.track` call, before the event fans out to **any** subscriber. A falsy return drops the event everywhere (Ahoy, GA4, Logger, …). It receives `payload:` and `request:` keywords:
+
+```ruby
+TrackRelay.configure do |c|
+  # Only track requests that prove a real browser — aligns first-party
+  # analytics (e.g. Ahoy) with what GA4 sees under the browser gate.
+  c.track_gate = ->(payload:, request:) {
+    TrackRelay::ClientId::Ga.from_request(request)
+  }
+end
+```
+
+Unset (`nil`, the default) disables the gate entirely.
+
 ### `client_id` resolver chain
 
 `TrackRelay::Current.client_id` is resolved via a configurable chain of `client_id_resolvers`. The default chain checks the GA `_ga` cookie, then any Ahoy visitor token, then mints a session-stable UUID into `session[:track_relay_client_id]` so visitors without a `_ga` cookie still get a stable identifier. First non-nil wins; per-resolver exceptions are isolated so a single buggy resolver cannot block the chain.

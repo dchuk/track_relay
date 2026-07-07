@@ -28,6 +28,35 @@ module TrackRelay
     # and yield `nil` (callers should fall through to the next resolver
     # in the chain).
     class Ga
+      # Parse a raw `_ga` cookie value into a GA4 client_id.
+      #
+      # This is THE canonical `_ga` parse rule — the resolver chain
+      # ({#call}) and the browser-proof delivery gate
+      # ({Subscribers::Ga4MeasurementProtocol#prepare}) both delegate
+      # here so the "fewer than four segments = malformed = nil"
+      # posture is defined exactly once.
+      #
+      # @param cookie_value [String, nil] raw `_ga` cookie value
+      # @return [String, nil] the parsed GA4 client_id, or `nil` when
+      #   the value is missing/empty/malformed.
+      def self.parse(cookie_value)
+        return nil if cookie_value.nil? || cookie_value.empty?
+
+        parts = cookie_value.split(".")
+        return nil if parts.size < 4
+
+        "#{parts[-2]}.#{parts[-1]}"
+      end
+
+      # Extract and parse the `_ga` cookie from a request-like object.
+      #
+      # @param request [#cookies, nil] any object exposing
+      #   `request.cookies["_ga"]` (e.g. an `ActionDispatch::Request`).
+      # @return [String, nil]
+      def self.from_request(request)
+        parse(request&.cookies&.[]("_ga"))
+      end
+
       # @param controller [#request] any object exposing
       #   `controller.request.cookies["_ga"]`. Typically an
       #   `ActionController::Base` instance from
@@ -35,13 +64,7 @@ module TrackRelay
       # @return [String, nil] the parsed GA4 client_id, or `nil` when the
       #   cookie is missing/empty/malformed.
       def call(controller:, **)
-        ga_cookie = controller&.request&.cookies&.[]("_ga")
-        return nil if ga_cookie.nil? || ga_cookie.empty?
-
-        parts = ga_cookie.split(".")
-        return nil if parts.size < 4
-
-        "#{parts[-2]}.#{parts[-1]}"
+        self.class.from_request(controller&.request)
       end
     end
   end

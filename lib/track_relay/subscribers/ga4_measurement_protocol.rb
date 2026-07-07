@@ -35,6 +35,12 @@ module TrackRelay
     #   - `config.ga4_api_secret`     — per-stream MP secret
     #   - `config.ga4_use_eu_endpoint` — when `true`, post to
     #     `https://region1.google-analytics.com/mp/collect`
+    #   - `config.ga4_require_browser_client_id` — when `true`, deliver
+    #     only for requests carrying a genuine `_ga` cookie (see
+    #     {#prepare})
+    #   - `config.ga4_enrich_page_context` — when `true`, merge
+    #     `page_location` / `page_referrer` / `session_id` /
+    #     `engagement_time_msec` into delivered params (see {#prepare})
     #
     # When `ga4_measurement_id` or `ga4_api_secret` is `nil`, `#deliver`
     # emits a single `Rails.logger.warn` and returns without raising —
@@ -85,6 +91,46 @@ module TrackRelay
       # drops them.
       RESERVED_PARAM_PREFIXES = %w[firebase_ ga_ google_].freeze
 
+      # Nominal engagement time attached alongside `session_id` when
+      # page-context enrichment finds a gtag session cookie. GA4 needs
+      # a nonzero value for server events to count toward session
+      # activity; the number itself is nominal (Google's Measurement
+      # Protocol examples use 100).
+      ENGAGEMENT_TIME_MSEC = 100
+
+      # Browser-proof gate + page-context enrichment (issue #1), both
+      # opt-in via configuration. Runs at notification time —
+      # {Current.request} is gone by the time an async {DeliveryJob}
+      # performs, so gating and enrichment MUST happen here and ride
+      # through the serialized payload.
+      #
+      # - `config.ga4_require_browser_client_id`: deliver only when the
+      #   current request carries a genuine `_ga` cookie; the
+      #   cookie-derived client_id lands in the delivered context.
+      # - `config.ga4_enrich_page_context`: merge `page_location`,
+      #   conditional `page_referrer`, and conditional `session_id` /
+      #   `engagement_time_msec` into the delivered params.
+      #
+      # Either path swaps in a **copy** — the shared payload other
+      # subscribers receive during fan-out is never mutated.
+      #
+      # @param payload [EventPayload]
+      # @return [EventPayload, nil] `nil` drops the event (no job)
+      def prepare(payload)
+        config = TrackRelay.config
+        return payload unless config.ga4_require_browser_client_id || config.ga4_enrich_page_context
+
+        request = Current.request
+        client_id = ClientId::Ga.from_request(request)
+        return nil if config.ga4_require_browser_client_id && client_id.nil?
+        return payload if request.nil?
+
+        hash = payload.to_h
+        hash[:params] = hash[:params].merge(page_params(request)) if config.ga4_enrich_page_context
+        hash[:context] = hash[:context].merge(client_id: client_id) if client_id
+        EventPayload.from_h(hash)
+      end
+
       # POST `payload` to the GA4 Measurement Protocol endpoint.
       #
       # See class docs for the full configuration / error contract.
@@ -111,6 +157,37 @@ module TrackRelay
       end
 
       private
+
+      # Page-context params captured from the live request (only when
+      # `config.ga4_enrich_page_context` is enabled).
+      def page_params(request)
+        params = {page_location: request.original_url}
+        params[:page_referrer] = request.referer if request.referer && !request.referer.empty?
+
+        if (session_id = ga_session_id(request))
+          params[:session_id] = session_id
+          params[:engagement_time_msec] = ENGAGEMENT_TIME_MSEC
+        end
+        params
+      end
+
+      # The gtag session cookie is `_ga_<stream>` (measurement id minus
+      # the "G-" prefix), shaped `GS1.1.<session_id>.<session_number>...`.
+      # The format is Google-controlled, so parse defensively — too few
+      # segments or a blank session segment yields nil and the delivery
+      # proceeds without session params.
+      def ga_session_id(request)
+        stream = TrackRelay.config.ga4_measurement_id.to_s.delete_prefix("G-")
+        return nil if stream.empty?
+
+        cookie = request.cookies["_ga_#{stream}"]
+        return nil if cookie.nil? || cookie.empty?
+
+        parts = cookie.split(".")
+        return nil if parts.size < 4 || parts[2].nil? || parts[2].empty?
+
+        parts[2]
+      end
 
       # Run call-time payload constraint checks (REQ-27 split). Returns
       # `true` when delivery should proceed, `false` when a constraint

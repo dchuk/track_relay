@@ -109,12 +109,32 @@ module TrackRelay
       def handle(payload)
         return nil if filtered?(payload.name.to_sym)
 
+        payload = prepare(payload)
+        return nil if payload.nil?
+
         if self.class.synchronous || TrackRelay.config.force_synchronous
           safe_deliver(payload)
         else
           DeliveryJob.perform_later(self.class.name, payload.to_h)
           nil
         end
+      end
+
+      # Notification-time hook, called by {#handle} after the event-name
+      # filter and BEFORE the sync/async branch — i.e. while the request
+      # ({Current.request}) is still in scope, which is gone by the time
+      # an async {DeliveryJob} runs.
+      #
+      # Subclasses override this to gate delivery (return `nil` to drop
+      # the event silently — no job, no `deliver`) or to swap in an
+      # enriched **copy** of the payload. The same payload object fans
+      # out to every subscriber, so implementations must never mutate
+      # `payload` — build a new {EventPayload} instead.
+      #
+      # @param payload [EventPayload]
+      # @return [EventPayload, nil] the payload to deliver, or `nil` to drop
+      def prepare(payload)
+        payload
       end
 
       # Wrap {#deliver} with the per-subscriber rescue.

@@ -82,6 +82,7 @@ module TrackRelay
           extra_context: direct_context
         )
         return unless validate(payload)
+        return unless track_gate_allows?(payload)
         ActiveSupport::Notifications.instrument(NOTIFICATION, event: payload)
       end
     end
@@ -213,6 +214,21 @@ module TrackRelay
         visit: Current.visit,
         request_id: Current.request&.request_id
       }
+    end
+
+    # Evaluate {Configuration#track_gate} once per track call, inside
+    # the `Current.set` scope so the gate sees the same request the
+    # subscribers would. Runs AFTER validation and BEFORE the
+    # notification fans out — a falsy return means no subscriber ever
+    # sees the event. Unset gate (`nil`) always allows.
+    #
+    # @param payload [EventPayload]
+    # @return [Boolean]
+    def track_gate_allows?(payload)
+      gate = TrackRelay.config.track_gate
+      return true if gate.nil?
+
+      !!gate.call(payload: payload, request: Current.request)
     end
 
     # Run {EventPayload#validate!} and apply the
