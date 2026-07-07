@@ -60,7 +60,7 @@ module TrackRelay
         run_generator
         assert_file "app/controllers/application_controller.rb" do |content|
           # Single include only — no duplicate.
-          assert_equal 1, content.scan(/include TrackRelay::ControllerTracking/).size
+          assert_equal 1, content.scan("include TrackRelay::ControllerTracking").size
         end
       end
 
