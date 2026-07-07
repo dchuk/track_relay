@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-07
+
+### Added
+- `config.ga4_require_browser_client_id` (default `false`) — browser-proof
+  delivery gate for `Subscribers::Ga4MeasurementProtocol`. When enabled,
+  events are delivered only when the current request carries a genuine
+  `_ga` cookie (set by gtag JS, which bots don't execute). No cookie — or a
+  malformed one with fewer than four dot-segments — enqueues no
+  `DeliveryJob` at all; the random per-event client_id fallback never
+  fires. The cookie-derived client_id rides in the delivered payload's
+  context.
+- `config.ga4_enrich_page_context` (default `false`) — notification-time
+  page/session enrichment for GA4 MP events: `page_location` (request
+  URL), `page_referrer` (when a referer exists), and `session_id` +
+  `engagement_time_msec` (nominal 100) when the gtag `_ga_<stream>`
+  session cookie is parseable. Captured while the request is in scope and
+  serialized through the payload, so async deliveries carry it. Without
+  these params GA4 files server-side events under a blank page path.
+- `config.track_gate` (default `nil`) — host-level fan-out gate. An
+  optional callable receiving `payload:` and `request:` keywords,
+  evaluated once per `TrackRelay.track` call before the event notification
+  fires; a falsy return drops the event for every subscriber. Enables
+  e.g. "only track requests that prove a real browser" across Ahoy, GA4,
+  and Logger at once.
+- `Subscribers::Base#prepare(payload)` — public notification-time hook
+  (filter → prepare → sync/async) for subclasses to gate delivery
+  (return `nil`) or swap in an enriched copy of the payload while the
+  request is still in scope.
+- `ClientId::Ga.parse` / `ClientId::Ga.from_request` — the `_ga` parse
+  rule as reusable class methods (the resolver-chain `#call` now
+  delegates to them).
+
+### Changed
+- All new options default off: an unconfigured upgrade is byte-identical
+  to 1.0.0 (the pre-existing test suite passes unmodified).
+
 ## [1.0.0] - 2026-05-07
 
 ### Added
@@ -141,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Privacy: untyped JSONL captures param NAMES only (never VALUES) to avoid leaking PII.
 - Naming: `track_relay` availability on RubyGems will be re-validated before 1.0.
 
+[1.1.0]: https://github.com/dchuk/track_relay/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/dchuk/track_relay/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/dchuk/track_relay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/dchuk/track_relay/releases/tag/v0.2.0
